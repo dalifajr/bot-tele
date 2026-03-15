@@ -17,6 +17,7 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Wizard admin berbasis tombol untuk cari akun dan tambah akun
 - Menu `Daftar Akun` admin: pilih source `awaiting`/`ready`/`sold`, klik akun untuk lihat detail lengkap, lalu ubah status via tombol
 - Pada detail akun tersedia tombol `Hapus` untuk menghapus akun dari source terkait
+- Tombol `Hapus` kini menggunakan konfirmasi 2 langkah (Ya, Hapus / Batal)
 - Daftar akun admin sudah menggunakan pagination (Prev/Next)
 - Menu `Ubah Status Akun Masal` untuk perubahan status banyak akun berdasarkan akun yang dipilih (tidak semua)
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`
@@ -159,6 +160,7 @@ Alur admin via tombol:
 - Gunakan `Daftar Akun` untuk melihat list akun awaiting/ready/sold (dengan pagination) lalu klik akun untuk detail + tombol ubah status
 - Pada detail akun tersedia tombol `Set Terjual` untuk memindahkan akun ke `terjual.json`
 - Gunakan `Ubah Status Akun Masal` untuk memilih beberapa akun tertentu lalu ubah status sekaligus
+- Di mode mass status tersedia tombol `Pilih Semua` untuk memilih seluruh akun pada source terpilih
 - Untuk aksi input, gunakan tombol:
   - `Cari Akun` lalu kirim keyword
   - `Tambah Akun` lalu kirim blok akun sesuai format

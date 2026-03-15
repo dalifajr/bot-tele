@@ -169,7 +169,7 @@ function accountDetailKeyboard(accountId, source, page) {
     rows.push([Markup.button.callback("Set Terjual", `admin_mark_sold:${accountId}`)]);
   }
 
-  rows.push([Markup.button.callback("Hapus", `admin_delete_acc:${accountId}`)]);
+  rows.push([Markup.button.callback("Hapus", `admin_delete_acc_prompt:${accountId}:${source}:${page || 1}`)]);
 
   rows.push([
     Markup.button.callback(
@@ -180,6 +180,16 @@ function accountDetailKeyboard(accountId, source, page) {
   rows.push([Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]);
 
   return Markup.inlineKeyboard(rows);
+}
+
+function accountDeleteConfirmKeyboard(accountId, source, page) {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback("Ya, Hapus", `admin_delete_acc_confirm:${accountId}:${source}:${page || 1}`),
+      Markup.button.callback("Batal", `admin_delete_acc_cancel:${accountId}:${source}:${page || 1}`)
+    ],
+    [Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]
+  ]);
 }
 
 function renderAccountDetail(account, source) {
@@ -276,6 +286,12 @@ function massAccountListKeyboard(source, accounts, page, state) {
   }
 
   rows.push(massTargetButtons(state));
+  rows.push([
+    Markup.button.callback(
+      state.selectedIds.size === accounts.length ? "Batalkan Pilih Semua" : "Pilih Semua",
+      `admin_mass_select_all:${source}:${currentPage}`
+    )
+  ]);
   rows.push([
     Markup.button.callback("Terapkan ke Akun Terpilih", `admin_mass_apply:${source}:${currentPage}`)
   ]);
@@ -924,6 +940,7 @@ function registerUserHandlers(bot) {
   });
 
   bot.action(/^admin_delete_acc:(.+)$/, async (ctx) => {
+    // Backward compatibility for old callback payloads.
     if (!isAdminUser(ctx)) {
       await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
       return;
@@ -933,6 +950,86 @@ function registerUserHandlers(bot) {
     const removed = deleteAccountById(accountId);
     await ctx.answerCbQuery();
 
+    if (!removed.ok) {
+      await replyOrEdit(ctx, "Gagal hapus akun. Akun tidak ditemukan.", adminMenuKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      [
+        "Akun berhasil dihapus.",
+        `Username: ${removed.account.username}`,
+        `Source asal: ${removed.source}`,
+        `ID: ${removed.account.id}`
+      ].join("\n"),
+      adminMenuKeyboard()
+    );
+  });
+
+  bot.action(/^admin_delete_acc_prompt:([^:]+):(awaiting|ready|sold):(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const accountId = ctx.match[1];
+    const source = ctx.match[2];
+    const page = Number(ctx.match[3]) || 1;
+    const found = getAccountById(accountId);
+
+    await ctx.answerCbQuery();
+    if (!found) {
+      await replyOrEdit(ctx, "Akun tidak ditemukan.", adminMenuKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      [
+        "Konfirmasi Hapus Akun",
+        `Username: ${found.account.username}`,
+        `ID: ${found.account.id}`,
+        "Tindakan ini akan menghapus akun secara permanen dari data source."
+      ].join("\n"),
+      accountDeleteConfirmKeyboard(accountId, source, page)
+    );
+  });
+
+  bot.action(/^admin_delete_acc_cancel:([^:]+):(awaiting|ready|sold):(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const accountId = ctx.match[1];
+    const source = ctx.match[2];
+    const page = Number(ctx.match[3]) || 1;
+    const found = getAccountById(accountId);
+
+    await ctx.answerCbQuery("Hapus dibatalkan");
+    if (!found) {
+      await replyOrEdit(ctx, "Akun tidak ditemukan.", adminMenuKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      renderAccountDetail(found.account, source),
+      accountDetailKeyboard(accountId, source, page)
+    );
+  });
+
+  bot.action(/^admin_delete_acc_confirm:([^:]+):(awaiting|ready|sold):(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const accountId = ctx.match[1];
+    await ctx.answerCbQuery();
+
+    const removed = deleteAccountById(accountId);
     if (!removed.ok) {
       await replyOrEdit(ctx, "Gagal hapus akun. Akun tidak ditemukan.", adminMenuKeyboard());
       return;
@@ -1092,6 +1189,44 @@ function registerUserHandlers(bot) {
     await ctx.answerCbQuery("Pilihan akun direset");
 
     const accounts = getAccountsBySource(source);
+    await replyOrEdit(
+      ctx,
+      [
+        `Ubah Status Akun Masal`,
+        `Source: ${source}`,
+        `Dipilih: ${state.selectedIds.size} akun`,
+        `Target: ${state.target}`,
+        `Total source: ${accounts.length}`
+      ].join("\n"),
+      massAccountListKeyboard(source, accounts, page, state)
+    );
+  });
+
+  bot.action(/^admin_mass_select_all:(awaiting|ready|sold):(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const source = ctx.match[1];
+    const page = Number(ctx.match[2]);
+    const state = getAdminMassState(ctx.from.id);
+
+    if (!state || state.source !== source) {
+      await ctx.answerCbQuery("Pilih source mass status dulu", { show_alert: true });
+      return;
+    }
+
+    const accounts = getAccountsBySource(source);
+    if (state.selectedIds.size === accounts.length) {
+      state.selectedIds = new Set();
+      await ctx.answerCbQuery("Semua pilihan dibatalkan");
+    } else {
+      state.selectedIds = new Set(accounts.map((acc) => acc.id));
+      await ctx.answerCbQuery(`Semua akun ${source} dipilih`);
+    }
+
+    setAdminMassState(ctx.from.id, state);
     await replyOrEdit(
       ctx,
       [
