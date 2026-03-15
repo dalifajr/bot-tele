@@ -473,7 +473,7 @@ async function replyOrEdit(ctx, text, keyboard) {
   await ctx.reply(text, keyboard ? keyboard : undefined);
 }
 
-async function createOrderForUser(ctx, quantity) {
+async function createOrderForUser(bot, ctx, quantity) {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     await replyOrEdit(ctx, "Jumlah checkout tidak valid.");
     return;
@@ -546,7 +546,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    await createOrderForUser(ctx, quantity);
+    await createOrderForUser(bot, ctx, quantity);
   });
 
   bot.command("status", async (ctx) => {
@@ -814,7 +814,7 @@ function registerUserHandlers(bot) {
 
   bot.action("checkout_confirm", async (ctx) => {
     await ctx.answerCbQuery();
-    await createOrderForUser(ctx, getQty(ctx.from.id));
+    await createOrderForUser(bot, ctx, getQty(ctx.from.id));
   });
 
   bot.action("menu_admin", async (ctx) => {
