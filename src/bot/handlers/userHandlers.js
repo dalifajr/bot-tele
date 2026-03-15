@@ -8,6 +8,7 @@ const {
   addReadyAccount,
   findByUsername,
   getAccountById,
+  deleteAccountById,
   moveAccountToSoldById,
   upsertBenefitStatusById,
   BENEFIT_STATUS
@@ -167,6 +168,8 @@ function accountDetailKeyboard(accountId, source, page) {
   if (source !== "sold") {
     rows.push([Markup.button.callback("Set Terjual", `admin_mark_sold:${accountId}`)]);
   }
+
+  rows.push([Markup.button.callback("Hapus", `admin_delete_acc:${accountId}`)]);
 
   rows.push([
     Markup.button.callback(
@@ -915,6 +918,33 @@ function registerUserHandlers(bot) {
         `Username: ${moved.account.username}`,
         `Pindah dari: ${moved.previousSource}`,
         "Menjadi: sold"
+      ].join("\n"),
+      adminMenuKeyboard()
+    );
+  });
+
+  bot.action(/^admin_delete_acc:(.+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const accountId = ctx.match[1];
+    const removed = deleteAccountById(accountId);
+    await ctx.answerCbQuery();
+
+    if (!removed.ok) {
+      await replyOrEdit(ctx, "Gagal hapus akun. Akun tidak ditemukan.", adminMenuKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      [
+        "Akun berhasil dihapus.",
+        `Username: ${removed.account.username}`,
+        `Source asal: ${removed.source}`,
+        `ID: ${removed.account.id}`
       ].join("\n"),
       adminMenuKeyboard()
     );

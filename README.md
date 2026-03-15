@@ -16,6 +16,7 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Tombol `Menu Admin` otomatis tampil untuk Telegram ID admin terdaftar
 - Wizard admin berbasis tombol untuk cari akun dan tambah akun
 - Menu `Daftar Akun` admin: pilih source `awaiting`/`ready`/`sold`, klik akun untuk lihat detail lengkap, lalu ubah status via tombol
+- Pada detail akun tersedia tombol `Hapus` untuk menghapus akun dari source terkait
 - Daftar akun admin sudah menggunakan pagination (Prev/Next)
 - Menu `Ubah Status Akun Masal` untuk perubahan status banyak akun berdasarkan akun yang dipilih (tidak semua)
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`

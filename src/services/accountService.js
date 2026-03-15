@@ -220,6 +220,42 @@ function getAccountById(accountId) {
   return null;
 }
 
+function deleteAccountById(accountId) {
+  const needle = String(accountId || "").trim();
+  if (!needle) {
+    return { ok: false, reason: "ACCOUNT_ID_REQUIRED" };
+  }
+
+  const ready = getReadyAccounts();
+  const awaiting = getAwaitingAccounts();
+  const sold = getSoldAccounts();
+
+  const removeFrom = (list, sourceName) => {
+    const idx = list.findIndex((item) => String(item.id) === needle);
+    if (idx === -1) {
+      return null;
+    }
+
+    const [account] = list.splice(idx, 1);
+    return { source: sourceName, account };
+  };
+
+  const removed = removeFrom(ready, "ready") || removeFrom(awaiting, "awaiting") || removeFrom(sold, "sold");
+  if (!removed) {
+    return { ok: false, reason: "NOT_FOUND" };
+  }
+
+  writeJson(paths.readyAccounts, ready);
+  writeJson(paths.awaitingAccounts, awaiting);
+  writeJson(paths.soldAccounts, sold);
+
+  return {
+    ok: true,
+    source: removed.source,
+    account: removed.account
+  };
+}
+
 function upsertBenefitStatusById(accountId, nextStatus) {
   const status = String(nextStatus || "").toUpperCase();
   if (![BENEFIT_STATUS.AWAITING, BENEFIT_STATUS.APPLIED, BENEFIT_STATUS.READY].includes(status)) {
@@ -397,6 +433,7 @@ module.exports = {
   moveReadyAccountsToSoldByIds,
   moveAccountToSoldById,
   getAccountById,
+  deleteAccountById,
   findByUsername,
   upsertBenefitStatusById,
   upsertBenefitStatusByUsername,
