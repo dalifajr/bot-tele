@@ -38,6 +38,29 @@ Script ini akan:
 - Install dependency project
 - Membuat `.env` dari `.env.example`
 - Menjalankan validasi/migrasi data awal
+- Menyiapkan panel maintenance server
+
+## Panel menu server (Ubuntu)
+
+Untuk memudahkan setting dan maintenance, jalankan:
+
+```bash
+chmod +x install/bot-panel.sh
+./install/bot-panel.sh
+```
+
+Menu panel menyediakan:
+- Setup konfigurasi dasar `.env`
+- Edit `.env` manual
+- Install/update dependency
+- Validasi dan migrasi data akun
+- Install dan kontrol service `bot-tele.service` (start/stop/restart/status)
+- Lihat log service (last/realtime)
+- Health check endpoint `/health`
+- Backup data (`list_akun_ready.json`, `awaiting_benefits.json`, `terjual.json`, `data`, `.env`)
+- Update project dari git (`git pull --ff-only`)
+
+Panel ini dirancang untuk server dengan systemd (Ubuntu production).
 
 ## Instalasi manual (opsional)
 
