@@ -93,10 +93,6 @@ function registerAdminHandlers(bot) {
     await ctx.reply(renderAdminMenuHelp());
   });
 
-  bot.command("myid", async (ctx) => {
-    await ctx.reply(`Telegram ID Anda: ${ctx.from?.id || "unknown"}`);
-  });
-
   bot.command("admin_stok", async (ctx) => {
     if (!(await ensureAdmin(ctx))) {
       return;

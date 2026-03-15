@@ -2,7 +2,11 @@ const { Markup } = require("telegraf");
 const { config } = require("../../config/env");
 const {
   getStockSummary,
-  getReadyAccounts
+  getReadyAccounts,
+  addReadyAccount,
+  findByUsername,
+  upsertBenefitStatusByUsername,
+  BENEFIT_STATUS
 } = require("../../services/accountService");
 const {
   createOrder,
@@ -13,8 +17,10 @@ const {
 } = require("../../services/orderService");
 const { formatCurrencyIdr, formatStockSummary } = require("../../utils/formatters");
 const { deliverOrderAccounts } = require("../../services/deliveryService");
+const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitHtmlService");
 
 const userCheckoutQty = new Map();
+const adminInputState = new Map();
 
 function isAdminUser(ctx) {
   return config.adminTelegramIds.includes(String(ctx.from?.id));
@@ -76,8 +82,68 @@ function adminMenuKeyboard() {
     [Markup.button.callback("Cek Stok", "admin_btn_stok")],
     [Markup.button.callback("Cek Pending", "admin_btn_pending")],
     [Markup.button.callback("Cek Pendapatan", "admin_btn_pendapatan")],
+    [Markup.button.callback("Cari Akun", "admin_btn_cari")],
+    [Markup.button.callback("Tambah Akun", "admin_btn_tambah")],
+    [Markup.button.callback("Set Status", "admin_btn_set_status")],
+    [Markup.button.callback("Parse Benefit", "admin_btn_parse_benefit")],
     [Markup.button.callback("Kembali", "menu_back")]
   ]);
+}
+
+function adminInputKeyboard() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback("Batal", "admin_input_cancel")],
+    [Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]
+  ]);
+}
+
+function setAdminState(userId, state) {
+  adminInputState.set(String(userId), state);
+}
+
+function clearAdminState(userId) {
+  adminInputState.delete(String(userId));
+}
+
+function getAdminState(userId) {
+  return adminInputState.get(String(userId)) || null;
+}
+
+function parseSingleAccountText(rawText) {
+  const lines = String(rawText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim());
+
+  const username = lines.find((line) => line.toLowerCase().startsWith("username:"));
+  const password = lines.find((line) => line.toLowerCase().startsWith("password:"));
+  const f2a = lines.find((line) => line.toLowerCase().startsWith("f2a:"));
+
+  if (!username || !password || !f2a) {
+    return null;
+  }
+
+  const recoveryIndex = lines.findIndex((line) => line.toLowerCase() === "recovery codes:");
+  const recoveryCodes = [];
+  if (recoveryIndex !== -1) {
+    for (let i = recoveryIndex + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!line) {
+        break;
+      }
+      if (line.includes(":")) {
+        break;
+      }
+      recoveryCodes.push(line);
+    }
+  }
+
+  return {
+    username: username.split(":").slice(1).join(":").trim(),
+    password: password.split(":").slice(1).join(":").trim(),
+    f2a: f2a.split(":").slice(1).join(":").trim(),
+    recoveryCodes,
+    seller: config.storeName
+  };
 }
 
 async function sendMainMenu(ctx) {
@@ -254,6 +320,132 @@ function registerUserHandlers(bot) {
     await ctx.reply(renderHelp());
   });
 
+  bot.on("text", async (ctx, next) => {
+    const rawText = String(ctx.message?.text || "").trim();
+    if (!rawText || rawText.startsWith("/")) {
+      if (typeof next === "function") {
+        return next();
+      }
+      return;
+    }
+
+    if (!isAdminUser(ctx)) {
+      if (typeof next === "function") {
+        return next();
+      }
+      return;
+    }
+
+    const state = getAdminState(ctx.from.id);
+    if (!state) {
+      if (typeof next === "function") {
+        return next();
+      }
+      return;
+    }
+
+    if (state === "ADMIN_WAIT_SEARCH") {
+      const results = findByUsername(rawText);
+      clearAdminState(ctx.from.id);
+
+      if (results.length === 0) {
+        await ctx.reply("Akun tidak ditemukan.", adminMenuKeyboard());
+        return;
+      }
+
+      const formatted = results
+        .slice(0, 30)
+        .map((item) => `- ${item.account.username} [${item.source}]`);
+      await ctx.reply([`Ditemukan ${results.length} akun:`, ...formatted].join("\n"), adminMenuKeyboard());
+      return;
+    }
+
+    if (state === "ADMIN_WAIT_ADD_ACCOUNT") {
+      const parsed = parseSingleAccountText(rawText);
+      clearAdminState(ctx.from.id);
+
+      if (!parsed) {
+        await ctx.reply(
+          "Format akun tidak valid. Pastikan ada Username, Password, F2A, dan format sesuai template.",
+          adminMenuKeyboard()
+        );
+        return;
+      }
+
+      const saved = addReadyAccount(parsed);
+      await ctx.reply(`Akun ${saved.username} berhasil ditambahkan ke ready stock.`, adminMenuKeyboard());
+      return;
+    }
+
+    if (state === "ADMIN_WAIT_SET_STATUS") {
+      const [username, statusText] = rawText.split(/\s+/);
+      clearAdminState(ctx.from.id);
+
+      const statusMap = {
+        awaiting: BENEFIT_STATUS.AWAITING,
+        ready: BENEFIT_STATUS.READY,
+        applied: BENEFIT_STATUS.APPLIED
+      };
+
+      const nextStatus = statusMap[String(statusText || "").toLowerCase()];
+      if (!username || !nextStatus) {
+        await ctx.reply(
+          "Format salah. Gunakan: <username> <awaiting|ready|applied>",
+          adminMenuKeyboard()
+        );
+        return;
+      }
+
+      const updated = upsertBenefitStatusByUsername(username, nextStatus);
+      if (!updated.ok) {
+        await ctx.reply("Akun tidak ditemukan atau status tidak valid.", adminMenuKeyboard());
+        return;
+      }
+
+      await ctx.reply(
+        [
+          `Akun ${updated.account.username} berhasil diupdate.`,
+          `Status benefit: ${updated.account.benefitStatus}`,
+          `Pindah dari: ${updated.previousSource}`,
+          `Menjadi: ${updated.nextSource}`
+        ].join("\n"),
+        adminMenuKeyboard()
+      );
+      return;
+    }
+
+    if (state === "ADMIN_WAIT_PARSE_BENEFIT") {
+      clearAdminState(ctx.from.id);
+      const username = rawText.split(/\s+/)[0];
+      const parsedStatus = detectBenefitStatusFromSnapshotFile();
+
+      if (!username) {
+        await ctx.reply("Username wajib diisi.", adminMenuKeyboard());
+        return;
+      }
+
+      if (!parsedStatus) {
+        await ctx.reply("Status tidak terdeteksi dari benefit.html", adminMenuKeyboard());
+        return;
+      }
+
+      const updated = upsertBenefitStatusByUsername(username, parsedStatus);
+      if (!updated.ok) {
+        await ctx.reply("Akun tidak ditemukan untuk username tersebut.", adminMenuKeyboard());
+        return;
+      }
+
+      await ctx.reply(
+        [
+          `Snapshot benefit berhasil diproses untuk ${updated.account.username}.`,
+          `Status baru: ${updated.account.benefitStatus}`,
+          "Source data: benefit.html"
+        ].join("\n"),
+        adminMenuKeyboard()
+      );
+    }
+  });
+
   bot.action("menu_back", async (ctx) => {
     await ctx.answerCbQuery();
     const stock = getStockSummary();
@@ -353,6 +545,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
+    clearAdminState(ctx.from.id);
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
@@ -363,6 +556,17 @@ function registerUserHandlers(bot) {
       ].join("\n"),
       adminMenuKeyboard()
     );
+  });
+
+  bot.action("admin_input_cancel", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    clearAdminState(ctx.from.id);
+    await ctx.answerCbQuery("Input dibatalkan");
+    await replyOrEdit(ctx, "Input admin dibatalkan.", adminMenuKeyboard());
   });
 
   bot.action("admin_btn_stok", async (ctx) => {
@@ -417,6 +621,74 @@ function registerUserHandlers(bot) {
         `Total pendapatan: ${formatCurrencyIdr(summary.totalRevenue)}`
       ].join("\n"),
       adminMenuKeyboard()
+    );
+  });
+
+  bot.action("admin_btn_cari", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    setAdminState(ctx.from.id, "ADMIN_WAIT_SEARCH");
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      "Kirim username/keyword akun yang ingin dicari.",
+      adminInputKeyboard()
+    );
+  });
+
+  bot.action("admin_btn_tambah", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    setAdminState(ctx.from.id, "ADMIN_WAIT_ADD_ACCOUNT");
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      [
+        "Kirim blok akun dengan format:",
+        "Username: ...",
+        "Password: ...",
+        "F2A: ...",
+        "Recovery Codes:",
+        "code1",
+        "code2"
+      ].join("\n"),
+      adminInputKeyboard()
+    );
+  });
+
+  bot.action("admin_btn_set_status", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    setAdminState(ctx.from.id, "ADMIN_WAIT_SET_STATUS");
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      "Kirim format: <username> <awaiting|ready|applied>",
+      adminInputKeyboard()
+    );
+  });
+
+  bot.action("admin_btn_parse_benefit", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    setAdminState(ctx.from.id, "ADMIN_WAIT_PARSE_BENEFIT");
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      "Kirim username akun untuk di-update berdasarkan snapshot benefit.html.",
+      adminInputKeyboard()
     );
   });
 }
