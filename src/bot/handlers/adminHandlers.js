@@ -42,7 +42,7 @@ function renderAdminMenuHelp() {
     "/admin_pendapatan",
     "/admin_cari <username>",
     "/admin_tambah <blok akun>",
-    "/admin_set_status <username> <awaiting|ready|applied>",
+    "/admin_set_status <username> <awaiting|ready>",
     "/admin_parse_benefit <username>"
   ].join("\n");
 }
@@ -185,19 +185,18 @@ function registerAdminHandlers(bot) {
 
     const [_, username, statusText] = String(ctx.message?.text || "").split(" ");
     if (!username || !statusText) {
-      await ctx.reply("Gunakan: /admin_set_status <username> <awaiting|ready|applied>");
+      await ctx.reply("Gunakan: /admin_set_status <username> <awaiting|ready>");
       return;
     }
 
     const statusMap = {
       awaiting: BENEFIT_STATUS.AWAITING,
-      ready: BENEFIT_STATUS.READY,
-      applied: BENEFIT_STATUS.APPLIED
+      ready: BENEFIT_STATUS.READY
     };
 
     const nextStatus = statusMap[String(statusText || "").toLowerCase()];
     if (!nextStatus) {
-      await ctx.reply("Status tidak valid. Gunakan salah satu: awaiting, ready, applied.");
+      await ctx.reply("Status tidak valid. Gunakan salah satu: awaiting, ready.");
       return;
     }
 

@@ -4,6 +4,7 @@ const {
   getStockSummary,
   getReadyAccounts,
   getAwaitingAccounts,
+  getSoldAccounts,
   addReadyAccount,
   findByUsername,
   getAccountById,
@@ -25,6 +26,7 @@ const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitH
 
 const userCheckoutQty = new Map();
 const adminInputState = new Map();
+const ACCOUNT_LIST_PAGE_SIZE = 15;
 
 function isAdminUser(ctx) {
   return config.adminTelegramIds.includes(String(ctx.from?.id));
@@ -87,7 +89,7 @@ function adminMenuKeyboard() {
     [Markup.button.callback("Cek Pending", "admin_btn_pending")],
     [Markup.button.callback("Cek Pendapatan", "admin_btn_pendapatan")],
     [Markup.button.callback("Daftar Akun", "admin_btn_list_accounts")],
-    [Markup.button.callback("Bulk Cek Awaiting", "admin_btn_bulk_check_awaiting")],
+    [Markup.button.callback("Ubah Status Akun Masal", "admin_btn_mass_status")],
     [Markup.button.callback("Cari Akun", "admin_btn_cari")],
     [Markup.button.callback("Tambah Akun", "admin_btn_tambah")],
     [Markup.button.callback("Set Status", "admin_btn_set_status")],
@@ -98,10 +100,29 @@ function adminMenuKeyboard() {
 
 function accountListSourceKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Awaiting", "admin_list_src_awaiting")],
-    [Markup.button.callback("Ready", "admin_list_src_ready")],
+    [Markup.button.callback("Awaiting", "admin_list_src:awaiting:1")],
+    [Markup.button.callback("Ready", "admin_list_src:ready:1")],
+    [Markup.button.callback("Terjual", "admin_list_src:sold:1")],
     [Markup.button.callback("Kembali", "menu_admin")]
   ]);
+}
+
+function getAccountsBySource(source) {
+  if (source === "awaiting") {
+    return getAwaitingAccounts();
+  }
+
+  if (source === "sold") {
+    return getSoldAccounts();
+  }
+
+  return getReadyAccounts();
+}
+
+function clampPage(page, totalItems) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / ACCOUNT_LIST_PAGE_SIZE));
+  const current = Number(page) || 1;
+  return Math.max(1, Math.min(totalPages, current));
 }
 
 function shortAccountLabel(account) {
@@ -110,22 +131,40 @@ function shortAccountLabel(account) {
   return `${username} (${status})`;
 }
 
-function accountListKeyboard(source, accounts) {
-  const rows = accounts.slice(0, 30).map((account) => [
-    Markup.button.callback(shortAccountLabel(account), `admin_open_acc:${source}:${account.id}`)
+function accountListKeyboard(source, accounts, page) {
+  const currentPage = clampPage(page, accounts.length);
+  const start = (currentPage - 1) * ACCOUNT_LIST_PAGE_SIZE;
+  const end = start + ACCOUNT_LIST_PAGE_SIZE;
+  const visible = accounts.slice(start, end);
+
+  const rows = visible.map((account) => [
+    Markup.button.callback(shortAccountLabel(account), `admin_open_acc:${source}:${account.id}:${currentPage}`)
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(accounts.length / ACCOUNT_LIST_PAGE_SIZE));
+
+  if (totalPages > 1) {
+    const navRow = [];
+    if (currentPage > 1) {
+      navRow.push(Markup.button.callback("Prev", `admin_list_src:${source}:${currentPage - 1}`));
+    }
+    navRow.push(Markup.button.callback(`${currentPage}/${totalPages}`, "admin_page_noop"));
+    if (currentPage < totalPages) {
+      navRow.push(Markup.button.callback("Next", `admin_list_src:${source}:${currentPage + 1}`));
+    }
+    rows.push(navRow);
+  }
 
   rows.push([Markup.button.callback("Kembali", "admin_btn_list_accounts")]);
   return Markup.inlineKeyboard(rows);
 }
 
-function accountDetailKeyboard(accountId, source) {
+function accountDetailKeyboard(accountId, source, page) {
   const rows = [
     [
       Markup.button.callback("Set Awaiting", `admin_set_acc_status:${accountId}:AWAITING`),
       Markup.button.callback("Set Ready", `admin_set_acc_status:${accountId}:READY`)
-    ],
-    [Markup.button.callback("Set Applied", `admin_set_acc_status:${accountId}:APPLIED`)]
+    ]
   ];
 
   if (source !== "sold") {
@@ -135,7 +174,7 @@ function accountDetailKeyboard(accountId, source) {
   rows.push([
     Markup.button.callback(
       "Kembali ke List",
-      source === "awaiting" ? "admin_list_src_awaiting" : "admin_list_src_ready"
+      `admin_list_src:${source}:${page || 1}`
     )
   ]);
   rows.push([Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]);
@@ -168,6 +207,65 @@ function adminInputKeyboard() {
     [Markup.button.callback("Batal", "admin_input_cancel")],
     [Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]
   ]);
+}
+
+function adminMassStatusKeyboard() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback("Awaiting -> Ready", "admin_mass_status:AWAITING:READY")],
+    [Markup.button.callback("Ready -> Awaiting", "admin_mass_status:READY:AWAITING")],
+    [Markup.button.callback("Awaiting -> Terjual", "admin_mass_status:AWAITING:SOLD")],
+    [Markup.button.callback("Ready -> Terjual", "admin_mass_status:READY:SOLD")],
+    [Markup.button.callback("Terjual -> Ready", "admin_mass_status:SOLD:READY")],
+    [Markup.button.callback("Terjual -> Awaiting", "admin_mass_status:SOLD:AWAITING")],
+    [Markup.button.callback("Kembali", "menu_admin")]
+  ]);
+}
+
+function runMassStatusUpdate(sourceStatus, targetStatus) {
+  const source = String(sourceStatus || "").toUpperCase();
+  const target = String(targetStatus || "").toUpperCase();
+
+  const sourceMap = {
+    AWAITING: "awaiting",
+    READY: "ready",
+    SOLD: "sold"
+  };
+
+  const sourceBucket = sourceMap[source];
+  if (!sourceBucket) {
+    return { ok: false, reason: "SOURCE_INVALID" };
+  }
+
+  const accounts = getAccountsBySource(sourceBucket);
+  let success = 0;
+  let failed = 0;
+
+  for (const account of accounts) {
+    let result;
+    if (target === "SOLD") {
+      result = moveAccountToSoldById(account.id, {
+        orderId: `ADMIN-MASS-${Date.now()}`,
+        pricePerAccount: config.productPriceIdr
+      });
+    } else {
+      result = upsertBenefitStatusById(account.id, target);
+    }
+
+    if (result && result.ok) {
+      success += 1;
+    } else {
+      failed += 1;
+    }
+  }
+
+  return {
+    ok: true,
+    source,
+    target,
+    total: accounts.length,
+    success,
+    failed
+  };
 }
 
 function setAdminState(userId, state) {
@@ -456,14 +554,13 @@ function registerUserHandlers(bot) {
 
       const statusMap = {
         awaiting: BENEFIT_STATUS.AWAITING,
-        ready: BENEFIT_STATUS.READY,
-        applied: BENEFIT_STATUS.APPLIED
+        ready: BENEFIT_STATUS.READY
       };
 
       const nextStatus = statusMap[String(statusText || "").toLowerCase()];
       if (!username || !nextStatus) {
         await ctx.reply(
-          "Format salah. Gunakan: <username> <awaiting|ready|applied>",
+          "Format salah. Gunakan: <username> <awaiting|ready>",
           adminMenuKeyboard()
         );
         return;
@@ -711,47 +808,32 @@ function registerUserHandlers(bot) {
     );
   });
 
-  bot.action("admin_list_src_awaiting", async (ctx) => {
+  bot.action(/^admin_list_src:(awaiting|ready|sold):(\d+)$/, async (ctx) => {
     if (!isAdminUser(ctx)) {
       await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
       return;
     }
 
+    const source = ctx.match[1];
+    const requestedPage = Number(ctx.match[2]);
     await ctx.answerCbQuery();
-    const accounts = getAwaitingAccounts();
+    const accounts = getAccountsBySource(source);
     if (accounts.length === 0) {
-      await replyOrEdit(ctx, "Tidak ada akun di source awaiting.", accountListSourceKeyboard());
+      await replyOrEdit(ctx, `Tidak ada akun di source ${source}.`, accountListSourceKeyboard());
       return;
     }
+
+    const page = clampPage(requestedPage, accounts.length);
+    const totalPages = Math.max(1, Math.ceil(accounts.length / ACCOUNT_LIST_PAGE_SIZE));
 
     await replyOrEdit(
       ctx,
-      `List akun awaiting (${accounts.length} akun, tampil maks 30):`,
-      accountListKeyboard("awaiting", accounts)
+      `List akun ${source} (${accounts.length} akun) - halaman ${page}/${totalPages}`,
+      accountListKeyboard(source, accounts, page)
     );
   });
 
-  bot.action("admin_list_src_ready", async (ctx) => {
-    if (!isAdminUser(ctx)) {
-      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
-      return;
-    }
-
-    await ctx.answerCbQuery();
-    const accounts = getReadyAccounts();
-    if (accounts.length === 0) {
-      await replyOrEdit(ctx, "Tidak ada akun di source ready.", accountListSourceKeyboard());
-      return;
-    }
-
-    await replyOrEdit(
-      ctx,
-      `List akun ready (${accounts.length} akun, tampil maks 30):`,
-      accountListKeyboard("ready", accounts)
-    );
-  });
-
-  bot.action(/^admin_open_acc:(awaiting|ready):(.+)$/, async (ctx) => {
+  bot.action(/^admin_open_acc:(awaiting|ready|sold):(.+):(\d+)$/, async (ctx) => {
     if (!isAdminUser(ctx)) {
       await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
       return;
@@ -759,6 +841,7 @@ function registerUserHandlers(bot) {
 
     const source = ctx.match[1];
     const accountId = ctx.match[2];
+    const page = Number(ctx.match[3]) || 1;
     const found = getAccountById(accountId);
 
     await ctx.answerCbQuery();
@@ -770,11 +853,11 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       renderAccountDetail(found.account, source),
-      accountDetailKeyboard(accountId, source)
+      accountDetailKeyboard(accountId, source, page)
     );
   });
 
-  bot.action(/^admin_set_acc_status:(.+):(AWAITING|READY|APPLIED)$/, async (ctx) => {
+  bot.action(/^admin_set_acc_status:(.+):(AWAITING|READY)$/, async (ctx) => {
     if (!isAdminUser(ctx)) {
       await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
       return;
@@ -844,65 +927,62 @@ function registerUserHandlers(bot) {
     );
   });
 
-  bot.action("admin_btn_bulk_check_awaiting", async (ctx) => {
+  bot.action("admin_btn_mass_status", async (ctx) => {
     if (!isAdminUser(ctx)) {
       await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
       return;
     }
 
     await ctx.answerCbQuery();
-    const awaiting = getAwaitingAccounts();
-    if (awaiting.length === 0) {
-      await replyOrEdit(ctx, "Tidak ada akun awaiting untuk dicek bulk.", adminMenuKeyboard());
+    await replyOrEdit(
+      ctx,
+      "Pilih skenario ubah status akun masal:",
+      adminMassStatusKeyboard()
+    );
+  });
+
+  bot.action(/^admin_mass_status:(AWAITING|READY|SOLD):(AWAITING|READY|SOLD)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
       return;
     }
 
-    const parsedStatus = detectBenefitStatusFromSnapshotFile();
-    if (!parsedStatus) {
-      await replyOrEdit(
-        ctx,
-        [
-          "Status tidak terdeteksi dari benefit.html.",
-          "Pastikan snapshot halaman benefit sudah terbaru."
-        ].join("\n"),
-        adminMenuKeyboard()
-      );
+    const source = ctx.match[1];
+    const target = ctx.match[2];
+
+    if (source === target) {
+      await ctx.answerCbQuery("Source dan target sama", { show_alert: true });
       return;
     }
 
-    if (parsedStatus === BENEFIT_STATUS.AWAITING) {
-      await replyOrEdit(
-        ctx,
-        [
-          `Bulk check selesai.`,
-          `Snapshot menunjukkan status: ${parsedStatus}`,
-          `Tidak ada akun yang dipindahkan.`
-        ].join("\n"),
-        adminMenuKeyboard()
-      );
+    await ctx.answerCbQuery();
+    const result = runMassStatusUpdate(source, target);
+    if (!result.ok) {
+      await replyOrEdit(ctx, "Gagal menjalankan status masal.", adminMenuKeyboard());
       return;
-    }
-
-    let moved = 0;
-    for (const account of awaiting) {
-      const result = upsertBenefitStatusById(account.id, parsedStatus);
-      if (result.ok) {
-        moved += 1;
-      }
     }
 
     const summary = getStockSummary();
     await replyOrEdit(
       ctx,
       [
-        `Bulk check selesai.`,
-        `Snapshot status: ${parsedStatus}`,
-        `Akun dipindahkan dari awaiting: ${moved}`,
-        `Sisa awaiting: ${summary.awaitingCount}`,
-        `Ready: ${summary.readyCount}`
+        "Ubah status masal selesai.",
+        `Source: ${result.source}`,
+        `Target: ${result.target}`,
+        `Diproses: ${result.total}`,
+        `Berhasil: ${result.success}`,
+        `Gagal: ${result.failed}`,
+        "",
+        `Ready: ${summary.readyCount}`,
+        `Awaiting: ${summary.awaitingCount}`,
+        `Sold: ${summary.soldCount}`
       ].join("\n"),
       adminMenuKeyboard()
     );
+  });
+
+  bot.action("admin_page_noop", async (ctx) => {
+    await ctx.answerCbQuery("Gunakan Prev/Next untuk pindah halaman");
   });
 
   bot.action("admin_btn_cari", async (ctx) => {
@@ -953,7 +1033,7 @@ function registerUserHandlers(bot) {
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
-      "Kirim format: <username> <awaiting|ready|applied>",
+      "Kirim format: <username> <awaiting|ready>",
       adminInputKeyboard()
     );
   });

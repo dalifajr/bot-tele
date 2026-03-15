@@ -15,8 +15,9 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Checkout dengan tombol `-` dan `+` untuk atur quantity
 - Tombol `Menu Admin` otomatis tampil untuk Telegram ID admin terdaftar
 - Wizard admin berbasis tombol untuk cari akun, tambah akun, set status, dan parse benefit
-- Menu `Daftar Akun` admin: pilih source `awaiting`/`ready`, klik akun untuk lihat detail lengkap, lalu ubah status via tombol
-- Tombol `Bulk Cek Awaiting` untuk update massal akun awaiting berdasarkan parser snapshot `benefit.html`
+- Menu `Daftar Akun` admin: pilih source `awaiting`/`ready`/`sold`, klik akun untuk lihat detail lengkap, lalu ubah status via tombol
+- Daftar akun admin sudah menggunakan pagination (Prev/Next)
+- Menu `Ubah Status Akun Masal` untuk perubahan status banyak akun sekaligus
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`
 - Flow admin: cek stok, cek pending, cek pendapatan, tambah akun, cari akun, ubah status benefit
 - Webhook pembayaran HMAC untuk menandai order `PAID`
@@ -148,19 +149,19 @@ Admin:
 - `/admin_pendapatan`
 - `/admin_cari <username>`
 - `/admin_tambah <blok akun>`
-- `/admin_set_status <username> <awaiting|ready|applied>`
+- `/admin_set_status <username> <awaiting|ready>`
 - `/admin_parse_benefit <username>`
 
 Alur admin via tombol:
 - Dari `/start` klik `Menu Admin`
 - Pilih aksi cepat: cek stok, cek pending, cek pendapatan
-- Gunakan `Daftar Akun` untuk melihat list akun awaiting/ready lalu klik akun untuk detail + tombol ubah status
+- Gunakan `Daftar Akun` untuk melihat list akun awaiting/ready/sold (dengan pagination) lalu klik akun untuk detail + tombol ubah status
 - Pada detail akun tersedia tombol `Set Terjual` untuk memindahkan akun ke `terjual.json`
-- Gunakan `Bulk Cek Awaiting` untuk pengecekan massal status awaiting (berdasarkan snapshot `benefit.html`)
+- Gunakan `Ubah Status Akun Masal` untuk perpindahan status massal antar source akun
 - Untuk aksi input, gunakan tombol:
   - `Cari Akun` lalu kirim keyword
   - `Tambah Akun` lalu kirim blok akun sesuai format
-  - `Set Status` lalu kirim `<username> <awaiting|ready|applied>`
+  - `Set Status` lalu kirim `<username> <awaiting|ready>`
   - `Parse Benefit` lalu kirim `<username>`
 
 ## Webhook pembayaran
