@@ -16,6 +16,8 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Webhook pembayaran HMAC untuk menandai order `PAID`
 - Pengiriman akun otomatis ke pembeli saat status pembayaran valid
 - Scheduler harian untuk notifikasi ringkasan stok + reminder pengecekan benefit
+- Idempotency webhook pembayaran (duplikasi callback tidak memproses order dua kali)
+- Expiry order otomatis berdasarkan `INVOICE_EXPIRE_MINUTES`
 
 ## Kebutuhan sistem
 
@@ -99,6 +101,9 @@ Catatan:
 - `PAYMENT_WEBHOOK_SECRET` wajib diganti di production.
 - Simpan file `.env`, jangan commit ke git.
 
+Catatan perilaku webhook:
+- Callback dengan `paymentReference` yang sama akan dianggap duplikat dan diabaikan.
+- Order yang sudah `EXPIRED`, `CANCELLED`, atau status non-payable lain tidak akan diproses ulang sebagai pembayaran baru.
 ## Menjalankan bot
 
 ```bash

@@ -111,7 +111,11 @@ function registerUserHandlers(bot) {
         `Status: ${order.status}`,
         `Total: ${formatCurrencyIdr(order.total)}`,
         `Invoice: ${order.payment.invoiceUrl}`,
-        `Expired: ${order.payment.expiresAt}`
+        `Expired: ${order.payment.expiresAt}`,
+        `Paid at: ${order.payment.paidAt || "-"}`,
+        `Payment ref: ${order.payment.paidReference || "-"}`,
+        `Delivery attempts: ${order.delivery && Number.isInteger(order.delivery.attempts) ? order.delivery.attempts : 0}`,
+        `Delivery error: ${order.delivery && order.delivery.lastError ? order.delivery.lastError : "-"}`
       ].join("\n")
     );
   });

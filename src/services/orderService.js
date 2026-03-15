@@ -7,11 +7,61 @@ const ORDER_STATUS = {
   PENDING_PAYMENT: "PENDING_PAYMENT",
   PAID: "PAID",
   DELIVERED: "DELIVERED",
+  DELIVERY_FAILED: "DELIVERY_FAILED",
+  EXPIRED: "EXPIRED",
   CANCELLED: "CANCELLED"
 };
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function normalizeOrderShape(order) {
+  const normalized = {
+    ...order,
+    payment: {
+      provider: order?.payment?.provider || config.qrisProvider,
+      invoiceId: order?.payment?.invoiceId || null,
+      invoiceUrl: order?.payment?.invoiceUrl || null,
+      qrString: order?.payment?.qrString || null,
+      paidAt: order?.payment?.paidAt || null,
+      paidReference: order?.payment?.paidReference || null,
+      expiresAt: order?.payment?.expiresAt || null,
+      receivedReferences: Array.isArray(order?.payment?.receivedReferences)
+        ? order.payment.receivedReferences
+        : (order?.payment?.paidReference ? [order.payment.paidReference] : [])
+    },
+    delivery: {
+      attempts: Number(order?.delivery?.attempts || 0),
+      deliveredAt: order?.delivery?.deliveredAt || null,
+      lastAttemptAt: order?.delivery?.lastAttemptAt || null,
+      lastError: order?.delivery?.lastError || null
+    }
+  };
+
+  return normalized;
+}
+
+function isOrderPayable(order) {
+  return order.status === ORDER_STATUS.PENDING_PAYMENT;
+}
+
+function isExpired(order) {
+  if (!order?.payment?.expiresAt) {
+    return false;
+  }
+
+  const exp = Date.parse(order.payment.expiresAt);
+  if (Number.isNaN(exp)) {
+    return false;
+  }
+
+  return exp < Date.now();
+}
+
 function listOrders() {
-  return safeReadJson(paths.orders, []);
+  const raw = safeReadJson(paths.orders, []);
+  return raw.map(normalizeOrderShape);
 }
 
 function saveOrders(orders) {
@@ -38,7 +88,14 @@ function createOrder({ telegramId, quantity, reservedAccounts }) {
       qrString: `QRIS-${invoiceId}-${total}`,
       paidAt: null,
       paidReference: null,
+      receivedReferences: [],
       expiresAt: new Date(Date.now() + config.invoiceExpireMinutes * 60 * 1000).toISOString()
+    },
+    delivery: {
+      attempts: 0,
+      deliveredAt: null,
+      lastAttemptAt: null,
+      lastError: null
     },
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
@@ -59,14 +116,24 @@ function markOrderPaid(orderId) {
     return null;
   }
 
-  if (orders[idx].status !== ORDER_STATUS.PENDING_PAYMENT) {
+  if (!isOrderPayable(orders[idx])) {
+    return orders[idx];
+  }
+
+  if (isExpired(orders[idx])) {
+    orders[idx].status = ORDER_STATUS.EXPIRED;
+    orders[idx].updatedAt = nowIso();
+    saveOrders(orders);
     return orders[idx];
   }
 
   orders[idx].status = ORDER_STATUS.PAID;
-  orders[idx].payment.paidAt = new Date().toISOString();
+  orders[idx].payment.paidAt = nowIso();
   orders[idx].payment.paidReference = orders[idx].payment.paidReference || `SIM-${uuidv4().slice(0, 10).toUpperCase()}`;
-  orders[idx].updatedAt = new Date().toISOString();
+  if (!orders[idx].payment.receivedReferences.includes(orders[idx].payment.paidReference)) {
+    orders[idx].payment.receivedReferences.push(orders[idx].payment.paidReference);
+  }
+  orders[idx].updatedAt = nowIso();
   saveOrders(orders);
   return orders[idx];
 }
@@ -76,20 +143,41 @@ function markOrderPaidFromWebhook(orderId, paymentReference) {
   const idx = orders.findIndex((item) => item.id === orderId);
 
   if (idx === -1) {
-    return null;
+    return { order: null, updated: false, duplicate: false, reason: "NOT_FOUND" };
   }
 
-  if (orders[idx].status !== ORDER_STATUS.PENDING_PAYMENT) {
-    return orders[idx];
+  const current = orders[idx];
+  const normalizedRef = paymentReference || `WEB-${uuidv4().slice(0, 10).toUpperCase()}`;
+
+  if (
+    (current.status === ORDER_STATUS.PAID || current.status === ORDER_STATUS.DELIVERED || current.status === ORDER_STATUS.DELIVERY_FAILED) &&
+    (current.payment.paidReference === normalizedRef || current.payment.receivedReferences.includes(normalizedRef))
+  ) {
+    return { order: current, updated: false, duplicate: true, reason: "DUPLICATE_REFERENCE" };
+  }
+
+  if (!isOrderPayable(current)) {
+    return { order: current, updated: false, duplicate: false, reason: "NOT_PAYABLE" };
+  }
+
+  if (isExpired(current)) {
+    orders[idx].status = ORDER_STATUS.EXPIRED;
+    orders[idx].updatedAt = nowIso();
+    saveOrders(orders);
+    return { order: orders[idx], updated: true, duplicate: false, reason: "EXPIRED" };
+  }
+
+  if (!orders[idx].payment.receivedReferences.includes(normalizedRef)) {
+    orders[idx].payment.receivedReferences.push(normalizedRef);
   }
 
   orders[idx].status = ORDER_STATUS.PAID;
-  orders[idx].payment.paidAt = new Date().toISOString();
-  orders[idx].payment.paidReference = paymentReference || `WEB-${uuidv4().slice(0, 10).toUpperCase()}`;
-  orders[idx].updatedAt = new Date().toISOString();
+  orders[idx].payment.paidAt = nowIso();
+  orders[idx].payment.paidReference = normalizedRef;
+  orders[idx].updatedAt = nowIso();
   saveOrders(orders);
 
-  return orders[idx];
+  return { order: orders[idx], updated: true, duplicate: false, reason: null };
 }
 
 function markOrderDelivered(orderId) {
@@ -100,14 +188,83 @@ function markOrderDelivered(orderId) {
     return null;
   }
 
-  if (orders[idx].status !== ORDER_STATUS.PAID) {
+  if (orders[idx].status !== ORDER_STATUS.PAID && orders[idx].status !== ORDER_STATUS.DELIVERY_FAILED) {
     return null;
   }
 
   orders[idx].status = ORDER_STATUS.DELIVERED;
-  orders[idx].updatedAt = new Date().toISOString();
+  orders[idx].delivery.deliveredAt = nowIso();
+  orders[idx].delivery.lastError = null;
+  orders[idx].updatedAt = nowIso();
   saveOrders(orders);
   return orders[idx];
+}
+
+function markOrderDeliveryAttempt(orderId) {
+  const orders = listOrders();
+  const idx = orders.findIndex((item) => item.id === orderId);
+
+  if (idx === -1) {
+    return null;
+  }
+
+  orders[idx].delivery.attempts = Number(orders[idx].delivery.attempts || 0) + 1;
+  orders[idx].delivery.lastAttemptAt = nowIso();
+  orders[idx].updatedAt = nowIso();
+  saveOrders(orders);
+  return orders[idx];
+}
+
+function markOrderDeliveryFailed(orderId, errorMessage) {
+  const orders = listOrders();
+  const idx = orders.findIndex((item) => item.id === orderId);
+
+  if (idx === -1) {
+    return null;
+  }
+
+  if (orders[idx].status === ORDER_STATUS.DELIVERED) {
+    return orders[idx];
+  }
+
+  orders[idx].status = ORDER_STATUS.DELIVERY_FAILED;
+  orders[idx].delivery.lastError = String(errorMessage || "DELIVERY_FAILED");
+  orders[idx].updatedAt = nowIso();
+  saveOrders(orders);
+  return orders[idx];
+}
+
+function expireOverdueOrders() {
+  const orders = listOrders();
+  let changed = false;
+  let expiredCount = 0;
+
+  const next = orders.map((order) => {
+    if (order.status !== ORDER_STATUS.PENDING_PAYMENT) {
+      return order;
+    }
+
+    if (!isExpired(order)) {
+      return order;
+    }
+
+    changed = true;
+    expiredCount += 1;
+    return {
+      ...order,
+      status: ORDER_STATUS.EXPIRED,
+      updatedAt: nowIso()
+    };
+  });
+
+  if (changed) {
+    saveOrders(next);
+  }
+
+  return {
+    changed,
+    expiredCount
+  };
 }
 
 function getOrderById(orderId) {
@@ -115,7 +272,7 @@ function getOrderById(orderId) {
 }
 
 function getPendingOrders() {
-  return listOrders().filter((item) => item.status === ORDER_STATUS.PENDING_PAYMENT);
+  return listOrders().filter((item) => item.status === ORDER_STATUS.PENDING_PAYMENT && !isExpired(item));
 }
 
 function getRevenueSummary() {
@@ -127,6 +284,41 @@ function getRevenueSummary() {
   };
 }
 
+function getOrderSummaryByStatus() {
+  const orders = listOrders();
+  const summary = {
+    total: orders.length,
+    pending: 0,
+    paid: 0,
+    delivered: 0,
+    deliveryFailed: 0,
+    expired: 0,
+    cancelled: 0
+  };
+
+  for (const order of orders) {
+    if (order.status === ORDER_STATUS.PENDING_PAYMENT) {
+      if (isExpired(order)) {
+        summary.expired += 1;
+      } else {
+        summary.pending += 1;
+      }
+    } else if (order.status === ORDER_STATUS.PAID) {
+      summary.paid += 1;
+    } else if (order.status === ORDER_STATUS.DELIVERED) {
+      summary.delivered += 1;
+    } else if (order.status === ORDER_STATUS.DELIVERY_FAILED) {
+      summary.deliveryFailed += 1;
+    } else if (order.status === ORDER_STATUS.EXPIRED) {
+      summary.expired += 1;
+    } else if (order.status === ORDER_STATUS.CANCELLED) {
+      summary.cancelled += 1;
+    }
+  }
+
+  return summary;
+}
+
 module.exports = {
   ORDER_STATUS,
   listOrders,
@@ -135,6 +327,10 @@ module.exports = {
   markOrderPaid,
   markOrderPaidFromWebhook,
   markOrderDelivered,
+  markOrderDeliveryAttempt,
+  markOrderDeliveryFailed,
+  expireOverdueOrders,
   getPendingOrders,
-  getRevenueSummary
+  getRevenueSummary,
+  getOrderSummaryByStatus
 };

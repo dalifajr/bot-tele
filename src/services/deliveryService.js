@@ -1,6 +1,6 @@
 const { config } = require("../config/env");
 const { moveReadyAccountsToSoldByIds } = require("./accountService");
-const { markOrderDelivered } = require("./orderService");
+const { markOrderDelivered, markOrderDeliveryAttempt, markOrderDeliveryFailed } = require("./orderService");
 
 function buildDeliveryText(order, account) {
   const lines = [
@@ -21,6 +21,8 @@ function buildDeliveryText(order, account) {
 }
 
 async function deliverOrderAccounts(bot, order) {
+  markOrderDeliveryAttempt(order.id);
+
   const sold = moveReadyAccountsToSoldByIds(order.reservedAccounts, {
     telegramId: order.telegramId,
     orderId: order.id,
@@ -29,26 +31,35 @@ async function deliverOrderAccounts(bot, order) {
 
   if (sold.length === 0) {
     await bot.telegram.sendMessage(order.telegramId, "Akun untuk order ini sudah tidak tersedia. Hubungi admin.");
+    markOrderDeliveryFailed(order.id, "STOCK_MISSING");
     return {
       ok: false,
       reason: "STOCK_MISSING"
     };
   }
 
-  for (const account of sold) {
-    await bot.telegram.sendDocument(
-      order.telegramId,
-      {
-        source: Buffer.from(buildDeliveryText(order, account), "utf8"),
-        filename: `${account.username}-${order.id}.txt`
-      },
-      {
-        caption: `Detail akun untuk ${account.username}`
-      }
-    );
-  }
+  try {
+    for (const account of sold) {
+      await bot.telegram.sendDocument(
+        order.telegramId,
+        {
+          source: Buffer.from(buildDeliveryText(order, account), "utf8"),
+          filename: `${account.username}-${order.id}.txt`
+        },
+        {
+          caption: `Detail akun untuk ${account.username}`
+        }
+      );
+    }
 
-  markOrderDelivered(order.id);
+    markOrderDelivered(order.id);
+  } catch (error) {
+    markOrderDeliveryFailed(order.id, error && error.message ? error.message : "DELIVERY_FAILED");
+    return {
+      ok: false,
+      reason: "DELIVERY_FAILED"
+    };
+  }
 
   return {
     ok: true,

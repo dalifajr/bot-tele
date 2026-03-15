@@ -66,10 +66,31 @@ function startPaymentWebhookServer(bot) {
         return;
       }
 
-      const paidOrder = markOrderPaidFromWebhook(orderId, paymentReference);
+      const paymentResult = markOrderPaidFromWebhook(orderId, paymentReference);
+      if (!paymentResult.order) {
+        sendJson(res, 500, { ok: false, message: "Failed to process payment" });
+        return;
+      }
 
-      if (!paidOrder) {
-        sendJson(res, 500, { ok: false, message: "Failed to mark order as paid" });
+      if (paymentResult.duplicate) {
+        sendJson(res, 200, { ok: true, duplicate: true, message: "Duplicate webhook ignored" });
+        return;
+      }
+
+      if (!paymentResult.updated) {
+        if (paymentResult.reason === "NOT_PAYABLE") {
+          sendJson(res, 409, { ok: false, message: `Order not payable. Current status: ${paymentResult.order.status}` });
+          return;
+        }
+
+        sendJson(res, 409, { ok: false, message: paymentResult.reason || "Payment ignored" });
+        return;
+      }
+
+      const paidOrder = paymentResult.order;
+
+      if (paidOrder.status === ORDER_STATUS.EXPIRED) {
+        sendJson(res, 409, { ok: false, message: "Order already expired" });
         return;
       }
 
