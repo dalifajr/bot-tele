@@ -28,6 +28,14 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 
 ## Instalasi cepat (Ubuntu)
 
+Single-line install (prepare dependency + clone + install):
+
+sudo apt-get update -y && sudo apt-get install -y git curl ca-certificates && git clone https://github.com/dalifajr/bot-tele.git /opt/bot-tele && cd /opt/bot-tele && chmod +x setup.sh && ./setup.sh
+
+Jika folder `/opt/bot-tele` sudah ada, gunakan single-line update + install:
+
+cd /opt/bot-tele && git pull --ff-only && chmod +x setup.sh && ./setup.sh
+
 Di root project, jalankan:
 
 ```bash
