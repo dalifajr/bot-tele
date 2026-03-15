@@ -1,0 +1,63 @@
+saya ingin membuat sebuah bot telegram untuk menjual produk digital, produk digital yang ingin saya jual adalah GitHub Student Dev Pack. saya ingin flow pembeliannya adalah:
+
+1. user mengunjungi bot tele saya.
+2. user klik strart.
+3. bot menampilkan list produk digital saya dan stoknya.
+4. user klik produk dan bisa order lebih dari satu akun.
+5. lalu user checkout dan bot mmebuatkan nomr order dan membuat tagihan, kemudian user melakukan pembayaran menggunakan API QRIS(coba cari penyedia pembayaran QRIS).
+6. setelah pembayaran confirmed bot langsung mengirimkan detail produk berbentuk file text yang bisa user unduh.
+
+untuk file produk, bot bisa mengambil detailnya di file list_akun_ready.txt untuk format per-akunnya adalah:[
+    *GitHub Students Dev Pack*
+Username: nurwahyuzz
+Password: Palembang278Y
+F2A: 5TYSURT7HQF3BW6V
+
+Recovery Codes:
+5eabf-0e1f2
+fd2fa-04b68
+777c1-27215
+5b4a4-b30b0
+50347-a5267
+9a72c-27009
+4e16c-9e708
+05fba-a87fe
+85400-13bdb
+c42e3-89073
+1416d-c18d0
+689b0-ac2a6
+d0ebb-cdf8a
+c4917-2e8bf
+49b4b-03ca5
+06c1b-093fe
+
+created at: Friday, 13/03/2026 03:15
+ready at: Monday, 16/03/2026 03:15
+_dzulfikrialifajri store_
+] silakan rapihkan struktur list_akun_ready menggunakan format .json.
+
+pada mode admin bot diakun tele, saya ingin agar saya bisa menambahkan stok langsung pada telegram dengan format seperti diatas, cek stok, cek total pendapatan, cek transaksi pending.
+
+untuk bot ini akan diinstall pada sistem operasi linux distro ubuntu minimal 20 dengan ram 4gb.
+
+buatkan file config untuk saya mengatur bot api, user admin tele.
+
+untuk akun yang sudah terjual, pisahkan kedalam file baru bernama terjual.json.
+
+buatkan fitur pencarian akun untuk akun yg sudah terjual/ready dengan username di menu admin bot.
+
+buatkan fitur untuk saya agar bisa mengecek status akun github student dev pack sudah status cupon appiled atau masih waiting kamu bisa mengeceknya pada link https://github.com/settings/education/benefits dan di elemen <div data-view-component="true" class="d-flex flex-auto flex-justify-between flex-items-center"><span data-view-component="true" class="my-1 col-3 px-3 d-inline-block text-bold f6">Coupon applied</span><div width="full" data-view-component="true" class="my-1 col-5 px-3"><span data-view-component="true" class="Progress Progress--large">
+    <span style="width: 1%;" data-view-component="true" class="Progress-item color-bg-done"></span>
+    <span style="width: 99%;" data-view-component="true" class="Progress-item color-bg-success-emphasis"></span>
+</span></div><span data-view-component="true" class="col-3 f6 text-right">Expires in almost 2 years</span></div> pada file benefit.html mungkin kamu perlu login kedalam masing-masing githubnya, untungnya pada detail akun ada F2A dan password.
+
+jika akun masih dalam status awaiting benefits pada elemen <div id="header-46ff0393-b31f-4676-b0a2-a9c555bad411" data-view-component="true" class="Box-header color-bg-success">
+  
+  <div data-view-component="true" class="d-flex flex-justify-between"><span data-view-component="true" class="float-left"><strong>Awaiting Benefits</strong> <span class="text-small color-fg-muted">(approved on March 14, 2026)</span></span><span data-view-component="true" class="float-right"><strong>Application Type:</strong> Student</span></div>
+</div>, silakan pindahkan kedalam file baru di awaiting_benefits.json untuk akun yang awaiting benefits, kamu bisa infokan kepada user dibot pada list produk berapa jumlah akun yg awaiting_benefits dan jangan lupa untuk memberitahu pula pada admin.
+
+lakukan pengecekan 1x sehari untuk mengecek status akun secara otomatis. beritahu user jika ada akun yang status nya cupon appiled melalui notifikasi di bot telegram.
+
+untuk memudahkan update, saya ingin project ini dipush ke github https://github.com/dalifajr/bot-tele.git
+
+untuk memudahkan instalasi pada github, saya ingin kamu buatkan installernya dan semua requirements yang diperlukan.

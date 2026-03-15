@@ -1,0 +1,21 @@
+{
+  "name": "bot-tele-digital-store",
+  "version": "0.1.0",
+  "description": "Telegram bot for digital product ordering with admin stock management",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate:accounts": "node src/scripts/migrateTextAccounts.js",
+    "check:data": "node src/scripts/checkDataFiles.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "telegraf": "^4.16.3",
+    "uuid": "^11.0.5"
+  }
+}
