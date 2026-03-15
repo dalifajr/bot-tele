@@ -11,9 +11,7 @@ function parseAdminIds(raw) {
   return raw
     .split(",")
     .map((v) => v.trim())
-    .filter(Boolean)
-    .map((v) => Number(v))
-    .filter((v) => Number.isInteger(v));
+    .filter((v) => /^\d+$/.test(v));
 }
 
 const config = {

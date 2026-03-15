@@ -15,7 +15,36 @@ const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitH
 
 function isAdmin(ctx) {
   const id = ctx.from?.id;
-  return config.adminTelegramIds.includes(id);
+  return config.adminTelegramIds.includes(String(id));
+}
+
+async function ensureAdmin(ctx) {
+  if (isAdmin(ctx)) {
+    return true;
+  }
+
+  await ctx.reply(
+    [
+      "Menu admin hanya untuk admin terdaftar.",
+      `Telegram ID Anda: ${ctx.from?.id || "unknown"}`,
+      "Pastikan ID tersebut ada di ADMIN_TELEGRAM_IDS lalu restart service bot."
+    ].join("\n")
+  );
+
+  return false;
+}
+
+function renderAdminMenuHelp() {
+  return [
+    "Admin command:",
+    "/admin_stok",
+    "/admin_pending",
+    "/admin_pendapatan",
+    "/admin_cari <username>",
+    "/admin_tambah <blok akun>",
+    "/admin_set_status <username> <awaiting|ready|applied>",
+    "/admin_parse_benefit <username>"
+  ].join("\n");
 }
 
 function parseSingleAccountText(rawText) {
@@ -56,8 +85,20 @@ function parseSingleAccountText(rawText) {
 }
 
 function registerAdminHandlers(bot) {
+  bot.command("admin", async (ctx) => {
+    if (!(await ensureAdmin(ctx))) {
+      return;
+    }
+
+    await ctx.reply(renderAdminMenuHelp());
+  });
+
+  bot.command("myid", async (ctx) => {
+    await ctx.reply(`Telegram ID Anda: ${ctx.from?.id || "unknown"}`);
+  });
+
   bot.command("admin_stok", async (ctx) => {
-    if (!isAdmin(ctx)) {
+    if (!(await ensureAdmin(ctx))) {
       return;
     }
 
@@ -74,7 +115,7 @@ function registerAdminHandlers(bot) {
   });
 
   bot.command("admin_pending", async (ctx) => {
-    if (!isAdmin(ctx)) {
+    if (!(await ensureAdmin(ctx))) {
       return;
     }
 
@@ -83,7 +124,7 @@ function registerAdminHandlers(bot) {
   });
 
   bot.command("admin_pendapatan", async (ctx) => {
-    if (!isAdmin(ctx)) {
+    if (!(await ensureAdmin(ctx))) {
       return;
     }
 
@@ -98,7 +139,7 @@ function registerAdminHandlers(bot) {
   });
 
   bot.command("admin_cari", async (ctx) => {
-    if (!isAdmin(ctx)) {
+    if (!(await ensureAdmin(ctx))) {
       return;
     }
 
@@ -120,7 +161,7 @@ function registerAdminHandlers(bot) {
   });
 
   bot.command("admin_tambah", async (ctx) => {
-    if (!isAdmin(ctx)) {
+    if (!(await ensureAdmin(ctx))) {
       return;
     }
 
@@ -142,7 +183,7 @@ function registerAdminHandlers(bot) {
   });
 
   bot.command("admin_set_status", async (ctx) => {
-    if (!isAdmin(ctx)) {
+    if (!(await ensureAdmin(ctx))) {
       return;
     }
 
@@ -181,7 +222,7 @@ function registerAdminHandlers(bot) {
   });
 
   bot.command("admin_parse_benefit", async (ctx) => {
-    if (!isAdmin(ctx)) {
+    if (!(await ensureAdmin(ctx))) {
       return;
     }
 

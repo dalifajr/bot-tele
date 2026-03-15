@@ -11,6 +11,9 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 
 ## Fitur yang sudah ada
 
+- Menu berbasis tombol (inline keyboard) untuk alur utama user
+- Checkout dengan tombol `-` dan `+` untuk atur quantity
+- Tombol `Menu Admin` otomatis tampil untuk Telegram ID admin terdaftar
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`
 - Flow admin: cek stok, cek pending, cek pendapatan, tambah akun, cari akun, ubah status benefit
 - Webhook pembayaran HMAC untuk menandai order `PAID`
@@ -128,12 +131,15 @@ npm run dev
 
 User:
 - `/start`
+- `/menu`
 - `/produk`
 - `/checkout <qty>`
 - `/status <order_id>`
 - `/paid <order_id>` (simulasi konfirmasi pembayaran)
+- `/myid`
 
 Admin:
+- `/admin` (ringkasan menu admin)
 - `/admin_stok`
 - `/admin_pending`
 - `/admin_pendapatan`
