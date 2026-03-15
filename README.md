@@ -154,7 +154,8 @@ Alur admin via tombol:
 - Pilih aksi cepat: cek stok, cek pending, cek pendapatan
 - Untuk aksi input, gunakan tombol:
   - `Cari Akun` lalu kirim keyword
-  - `Tambah Akun` lalu kirim blok akun sesuai format
+  - `Tambah Akun` lalu ikuti wizard step-by-step (username -> password -> F2A -> recovery)
+  - Saat input recovery code: ketik `/done` untuk selesai, `/skip` untuk lewati
   - `Set Status` lalu kirim `<username> <awaiting|ready|applied>`
   - `Parse Benefit` lalu kirim `<username>`
 
