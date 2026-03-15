@@ -26,7 +26,8 @@ const { deliverOrderAccounts } = require("../../services/deliveryService");
 const userCheckoutQty = new Map();
 const adminInputState = new Map();
 const adminMassState = new Map();
-const ACCOUNT_LIST_PAGE_SIZE = 15;
+const adminSearchState = new Map();
+const ACCOUNT_LIST_PAGE_SIZE = 10;
 
 function isAdminUser(ctx) {
   return config.adminTelegramIds.includes(String(ctx.from?.id));
@@ -157,7 +158,7 @@ function accountListKeyboard(source, accounts, page) {
   return Markup.inlineKeyboard(rows);
 }
 
-function accountDetailKeyboard(accountId, source, page) {
+function accountDetailKeyboard(accountId, source, page, backCallback) {
   const rows = [
     [
       Markup.button.callback("Set Awaiting", `admin_set_acc_status:${accountId}:AWAITING`),
@@ -174,7 +175,7 @@ function accountDetailKeyboard(accountId, source, page) {
   rows.push([
     Markup.button.callback(
       "Kembali ke List",
-      `admin_list_src:${source}:${page || 1}`
+      backCallback || `admin_list_src:${source}:${page || 1}`
     )
   ]);
   rows.push([Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]);
@@ -238,6 +239,52 @@ function getAdminMassState(userId) {
 
 function clearAdminMassState(userId) {
   adminMassState.delete(String(userId));
+}
+
+function setAdminSearchState(userId, state) {
+  adminSearchState.set(String(userId), state);
+}
+
+function getAdminSearchState(userId) {
+  return adminSearchState.get(String(userId)) || null;
+}
+
+function clearAdminSearchState(userId) {
+  adminSearchState.delete(String(userId));
+}
+
+function searchResultKeyboard(results, page) {
+  const currentPage = clampPage(page, results.length);
+  const start = (currentPage - 1) * ACCOUNT_LIST_PAGE_SIZE;
+  const end = start + ACCOUNT_LIST_PAGE_SIZE;
+  const visible = results.slice(start, end);
+
+  const rows = visible.map((item) => [
+    Markup.button.callback(
+      `${item.account.username} [${item.source}]`,
+      `admin_open_search_acc:${item.source}:${item.account.id}:${currentPage}`
+    )
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(results.length / ACCOUNT_LIST_PAGE_SIZE));
+  if (totalPages > 1) {
+    const navRow = [];
+    if (currentPage > 1) {
+      navRow.push(Markup.button.callback("Prev", `admin_search_page:${currentPage - 1}`));
+    }
+    navRow.push(Markup.button.callback(`${currentPage}/${totalPages}`, "admin_page_noop"));
+    if (currentPage < totalPages) {
+      navRow.push(Markup.button.callback("Next", `admin_search_page:${currentPage + 1}`));
+    }
+    rows.push(navRow);
+  }
+
+  rows.push([
+    Markup.button.callback("Cari Lagi", "admin_btn_cari"),
+    Markup.button.callback("Kembali", "menu_admin")
+  ]);
+
+  return Markup.inlineKeyboard(rows);
 }
 
 function massTargetButtons(state) {
@@ -591,16 +638,24 @@ function registerUserHandlers(bot) {
     if (state === "ADMIN_WAIT_SEARCH") {
       const results = findByUsername(rawText);
       clearAdminState(ctx.from.id);
+      clearAdminSearchState(ctx.from.id);
 
       if (results.length === 0) {
         await ctx.reply("Akun tidak ditemukan.", adminMenuKeyboard());
         return;
       }
 
-      const formatted = results
-        .slice(0, 30)
-        .map((item) => `- ${item.account.username} [${item.source}]`);
-      await ctx.reply([`Ditemukan ${results.length} akun:`, ...formatted].join("\n"), adminMenuKeyboard());
+      setAdminSearchState(ctx.from.id, {
+        keyword: rawText,
+        results
+      });
+
+      const page = 1;
+      const totalPages = Math.max(1, Math.ceil(results.length / ACCOUNT_LIST_PAGE_SIZE));
+      await ctx.reply(
+        `Ditemukan ${results.length} akun untuk keyword '${rawText}' - halaman ${page}/${totalPages}`,
+        searchResultKeyboard(results, page)
+      );
       return;
     }
 
@@ -727,6 +782,7 @@ function registerUserHandlers(bot) {
 
     clearAdminState(ctx.from.id);
     clearAdminMassState(ctx.from.id);
+    clearAdminSearchState(ctx.from.id);
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
@@ -747,6 +803,7 @@ function registerUserHandlers(bot) {
 
     clearAdminState(ctx.from.id);
     clearAdminMassState(ctx.from.id);
+    clearAdminSearchState(ctx.from.id);
     await ctx.answerCbQuery("Input dibatalkan");
     await replyOrEdit(ctx, "Input admin dibatalkan.", adminMenuKeyboard());
   });
@@ -866,6 +923,53 @@ function registerUserHandlers(bot) {
       ctx,
       renderAccountDetail(found.account, source),
       accountDetailKeyboard(accountId, source, page)
+    );
+  });
+
+  bot.action(/^admin_search_page:(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const requestedPage = Number(ctx.match[1]);
+    const state = getAdminSearchState(ctx.from.id);
+    if (!state || !Array.isArray(state.results) || state.results.length === 0) {
+      await ctx.answerCbQuery("Data pencarian tidak ada", { show_alert: true });
+      return;
+    }
+
+    const page = clampPage(requestedPage, state.results.length);
+    const totalPages = Math.max(1, Math.ceil(state.results.length / ACCOUNT_LIST_PAGE_SIZE));
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      `Ditemukan ${state.results.length} akun untuk keyword '${state.keyword}' - halaman ${page}/${totalPages}`,
+      searchResultKeyboard(state.results, page)
+    );
+  });
+
+  bot.action(/^admin_open_search_acc:(awaiting|ready|sold):(.+):(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const source = ctx.match[1];
+    const accountId = ctx.match[2];
+    const page = Number(ctx.match[3]) || 1;
+    const found = getAccountById(accountId);
+
+    await ctx.answerCbQuery();
+    if (!found) {
+      await replyOrEdit(ctx, "Akun tidak ditemukan.", adminMenuKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      renderAccountDetail(found.account, source),
+      accountDetailKeyboard(accountId, source, page, `admin_search_page:${page}`)
     );
   });
 

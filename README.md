@@ -18,7 +18,7 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Menu `Daftar Akun` admin: pilih source `awaiting`/`ready`/`sold`, klik akun untuk lihat detail lengkap, lalu ubah status via tombol
 - Pada detail akun tersedia tombol `Hapus` untuk menghapus akun dari source terkait
 - Tombol `Hapus` kini menggunakan konfirmasi 2 langkah (Ya, Hapus / Batal)
-- Daftar akun admin sudah menggunakan pagination (Prev/Next)
+- Daftar akun admin sudah menggunakan pagination (Prev/Next), 10 akun per halaman
 - Menu `Ubah Status Akun Masal` untuk perubahan status banyak akun berdasarkan akun yang dipilih (tidak semua)
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`
 - Flow admin: cek stok, cek pending, cek pendapatan, tambah akun, cari akun, ubah status benefit
