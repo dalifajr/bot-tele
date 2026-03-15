@@ -135,6 +135,97 @@ function findByUsername(username) {
   return results;
 }
 
+function getAccountById(accountId) {
+  const needle = String(accountId || "").trim();
+  if (!needle) {
+    return null;
+  }
+
+  const bucket = [
+    { source: "ready", items: getReadyAccounts() },
+    { source: "awaiting", items: getAwaitingAccounts() },
+    { source: "sold", items: getSoldAccounts() }
+  ];
+
+  for (const group of bucket) {
+    const found = group.items.find((item) => String(item.id) === needle);
+    if (found) {
+      return {
+        source: group.source,
+        account: found
+      };
+    }
+  }
+
+  return null;
+}
+
+function upsertBenefitStatusById(accountId, nextStatus) {
+  const status = String(nextStatus || "").toUpperCase();
+  if (![BENEFIT_STATUS.AWAITING, BENEFIT_STATUS.APPLIED, BENEFIT_STATUS.READY].includes(status)) {
+    return { ok: false, reason: "STATUS_INVALID" };
+  }
+
+  const needle = String(accountId || "").trim();
+  if (!needle) {
+    return { ok: false, reason: "ACCOUNT_ID_REQUIRED" };
+  }
+
+  const now = new Date().toISOString();
+
+  const ready = getReadyAccounts();
+  const awaiting = getAwaitingAccounts();
+  const sold = getSoldAccounts();
+
+  let found = null;
+  let foundSource = null;
+
+  const takeFrom = (list, sourceName) => {
+    const idx = list.findIndex((item) => String(item.id) === needle);
+    if (idx === -1) {
+      return null;
+    }
+
+    const [item] = list.splice(idx, 1);
+    found = item;
+    foundSource = sourceName;
+    return item;
+  };
+
+  takeFrom(ready, "ready") || takeFrom(awaiting, "awaiting") || takeFrom(sold, "sold");
+
+  if (!found) {
+    return { ok: false, reason: "NOT_FOUND" };
+  }
+
+  const updated = {
+    ...found,
+    benefitStatus: status,
+    benefitUpdatedAt: now
+  };
+
+  if (status === BENEFIT_STATUS.AWAITING) {
+    awaiting.push(updated);
+  } else if (status === BENEFIT_STATUS.READY || status === BENEFIT_STATUS.APPLIED) {
+    if (foundSource === "sold") {
+      sold.push(updated);
+    } else {
+      ready.push(updated);
+    }
+  }
+
+  writeJson(paths.readyAccounts, ready);
+  writeJson(paths.awaitingAccounts, awaiting);
+  writeJson(paths.soldAccounts, sold);
+
+  return {
+    ok: true,
+    account: updated,
+    previousSource: foundSource,
+    nextSource: status === BENEFIT_STATUS.AWAITING ? "awaiting" : (foundSource === "sold" ? "sold" : "ready")
+  };
+}
+
 function upsertBenefitStatusByUsername(username, nextStatus) {
   const status = String(nextStatus || "").toUpperCase();
   if (![BENEFIT_STATUS.AWAITING, BENEFIT_STATUS.APPLIED, BENEFIT_STATUS.READY].includes(status)) {
@@ -244,7 +335,9 @@ module.exports = {
   reserveReadyAccounts,
   moveAccountsToSold,
   moveReadyAccountsToSoldByIds,
+  getAccountById,
   findByUsername,
+  upsertBenefitStatusById,
   upsertBenefitStatusByUsername,
   getSoldAccountsNeedAppliedNotification,
   markSoldAccountAppliedNotified

@@ -3,8 +3,11 @@ const { config } = require("../../config/env");
 const {
   getStockSummary,
   getReadyAccounts,
+  getAwaitingAccounts,
   addReadyAccount,
   findByUsername,
+  getAccountById,
+  upsertBenefitStatusById,
   upsertBenefitStatusByUsername,
   BENEFIT_STATUS
 } = require("../../services/accountService");
@@ -21,12 +24,6 @@ const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitH
 
 const userCheckoutQty = new Map();
 const adminInputState = new Map();
-const ADMIN_MODE = {
-  WAIT_SEARCH: "ADMIN_WAIT_SEARCH",
-  WAIT_SET_STATUS: "ADMIN_WAIT_SET_STATUS",
-  WAIT_PARSE_BENEFIT: "ADMIN_WAIT_PARSE_BENEFIT",
-  ADD_ACCOUNT_WIZARD: "ADMIN_ADD_ACCOUNT_WIZARD"
-};
 
 function isAdminUser(ctx) {
   return config.adminTelegramIds.includes(String(ctx.from?.id));
@@ -88,12 +85,69 @@ function adminMenuKeyboard() {
     [Markup.button.callback("Cek Stok", "admin_btn_stok")],
     [Markup.button.callback("Cek Pending", "admin_btn_pending")],
     [Markup.button.callback("Cek Pendapatan", "admin_btn_pendapatan")],
+    [Markup.button.callback("Daftar Akun", "admin_btn_list_accounts")],
+    [Markup.button.callback("Bulk Cek Awaiting", "admin_btn_bulk_check_awaiting")],
     [Markup.button.callback("Cari Akun", "admin_btn_cari")],
     [Markup.button.callback("Tambah Akun", "admin_btn_tambah")],
     [Markup.button.callback("Set Status", "admin_btn_set_status")],
     [Markup.button.callback("Parse Benefit", "admin_btn_parse_benefit")],
     [Markup.button.callback("Kembali", "menu_back")]
   ]);
+}
+
+function accountListSourceKeyboard() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback("Awaiting", "admin_list_src_awaiting")],
+    [Markup.button.callback("Ready", "admin_list_src_ready")],
+    [Markup.button.callback("Kembali", "menu_admin")]
+  ]);
+}
+
+function shortAccountLabel(account) {
+  const username = String(account.username || "-");
+  const status = String(account.benefitStatus || "-");
+  return `${username} (${status})`;
+}
+
+function accountListKeyboard(source, accounts) {
+  const rows = accounts.slice(0, 30).map((account) => [
+    Markup.button.callback(shortAccountLabel(account), `admin_open_acc:${source}:${account.id}`)
+  ]);
+
+  rows.push([Markup.button.callback("Kembali", "admin_btn_list_accounts")]);
+  return Markup.inlineKeyboard(rows);
+}
+
+function accountDetailKeyboard(accountId, source) {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback("Set Awaiting", `admin_set_acc_status:${accountId}:AWAITING`),
+      Markup.button.callback("Set Ready", `admin_set_acc_status:${accountId}:READY`)
+    ],
+    [Markup.button.callback("Set Applied", `admin_set_acc_status:${accountId}:APPLIED`)],
+    [Markup.button.callback("Kembali ke List", source === "awaiting" ? "admin_list_src_awaiting" : "admin_list_src_ready")],
+    [Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]
+  ]);
+}
+
+function renderAccountDetail(account, source) {
+  const lines = [
+    `ID: ${account.id}`,
+    `Source: ${source}`,
+    `Status: ${account.benefitStatus}`,
+    `Username: ${account.username}`,
+    `Password: ${account.password}`,
+    `F2A: ${account.f2a}`,
+    "",
+    "Recovery Codes:"
+  ];
+
+  for (const code of account.recoveryCodes || []) {
+    lines.push(code);
+  }
+
+  lines.push("", `Inserted: ${account.insertedAt || "-"}`, `Benefit updated: ${account.benefitUpdatedAt || "-"}`);
+  return lines.join("\n");
 }
 
 function adminInputKeyboard() {
@@ -115,58 +169,41 @@ function getAdminState(userId) {
   return adminInputState.get(String(userId)) || null;
 }
 
-function isAddAccountWizardState(state) {
-  return state && typeof state === "object" && state.mode === ADMIN_MODE.ADD_ACCOUNT_WIZARD;
-}
+function parseSingleAccountText(rawText) {
+  const lines = String(rawText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim());
 
-function buildAddWizardPrompt(step, draft) {
-  if (step === "username") {
-    return "Wizard tambah akun (1/4): kirim USERNAME akun.";
+  const username = lines.find((line) => line.toLowerCase().startsWith("username:"));
+  const password = lines.find((line) => line.toLowerCase().startsWith("password:"));
+  const f2a = lines.find((line) => line.toLowerCase().startsWith("f2a:"));
+
+  if (!username || !password || !f2a) {
+    return null;
   }
 
-  if (step === "password") {
-    return [
-      "Wizard tambah akun (2/4): kirim PASSWORD akun.",
-      `Username: ${draft.username}`
-    ].join("\n");
+  const recoveryIndex = lines.findIndex((line) => line.toLowerCase() === "recovery codes:");
+  const recoveryCodes = [];
+  if (recoveryIndex !== -1) {
+    for (let i = recoveryIndex + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!line) {
+        break;
+      }
+      if (line.includes(":")) {
+        break;
+      }
+      recoveryCodes.push(line);
+    }
   }
 
-  if (step === "f2a") {
-    return [
-      "Wizard tambah akun (3/4): kirim F2A secret akun.",
-      `Username: ${draft.username}`
-    ].join("\n");
-  }
-
-  return [
-    "Wizard tambah akun (4/4): kirim Recovery Codes.",
-    "Kirim bisa lebih dari satu baris sekaligus.",
-    "Ketik /done untuk selesai, atau /skip untuk lewati recovery codes.",
-    `Username: ${draft.username}`,
-    `Recovery terkumpul: ${(draft.recoveryCodes || []).length}`
-  ].join("\n");
-}
-
-function parseRecoveryCodesInput(rawText) {
-  return String(rawText || "")
-    .split(/\r?\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .filter((item) => !item.startsWith("/"));
-}
-
-function finalizeAddAccountWizard(ctx, draft) {
-  const payload = {
-    username: draft.username,
-    password: draft.password,
-    f2a: draft.f2a,
-    recoveryCodes: Array.isArray(draft.recoveryCodes) ? draft.recoveryCodes : [],
+  return {
+    username: username.split(":").slice(1).join(":").trim(),
+    password: password.split(":").slice(1).join(":").trim(),
+    f2a: f2a.split(":").slice(1).join(":").trim(),
+    recoveryCodes,
     seller: config.storeName
   };
-
-  const saved = addReadyAccount(payload);
-  clearAdminState(ctx.from.id);
-  return saved;
 }
 
 async function sendMainMenu(ctx) {
@@ -345,17 +382,7 @@ function registerUserHandlers(bot) {
 
   bot.on("text", async (ctx, next) => {
     const rawText = String(ctx.message?.text || "").trim();
-    const state = getAdminState(ctx.from.id);
-
-    if (!rawText) {
-      if (typeof next === "function") {
-        return next();
-      }
-      return;
-    }
-
-    const isWizardCmd = rawText === "/done" || rawText === "/skip";
-    if (rawText.startsWith("/") && !isWizardCmd) {
+    if (!rawText || rawText.startsWith("/")) {
       if (typeof next === "function") {
         return next();
       }
@@ -369,6 +396,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
+    const state = getAdminState(ctx.from.id);
     if (!state) {
       if (typeof next === "function") {
         return next();
@@ -376,7 +404,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    if (state === ADMIN_MODE.WAIT_SEARCH) {
+    if (state === "ADMIN_WAIT_SEARCH") {
       const results = findByUsername(rawText);
       clearAdminState(ctx.from.id);
 
@@ -392,99 +420,24 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    if (isAddAccountWizardState(state)) {
-      const { step, draft } = state;
+    if (state === "ADMIN_WAIT_ADD_ACCOUNT") {
+      const parsed = parseSingleAccountText(rawText);
+      clearAdminState(ctx.from.id);
 
-      if (step === "username") {
-        if (rawText.includes(" ")) {
-          await ctx.reply("Username tidak boleh mengandung spasi. Coba lagi.", adminInputKeyboard());
-          return;
-        }
-
-        setAdminState(ctx.from.id, {
-          mode: ADMIN_MODE.ADD_ACCOUNT_WIZARD,
-          step: "password",
-          draft: {
-            ...draft,
-            username: rawText
-          }
-        });
-
-        await ctx.reply(buildAddWizardPrompt("password", { ...draft, username: rawText }), adminInputKeyboard());
-        return;
-      }
-
-      if (step === "password") {
-        setAdminState(ctx.from.id, {
-          mode: ADMIN_MODE.ADD_ACCOUNT_WIZARD,
-          step: "f2a",
-          draft: {
-            ...draft,
-            password: rawText
-          }
-        });
-
-        await ctx.reply(buildAddWizardPrompt("f2a", { ...draft, password: rawText }), adminInputKeyboard());
-        return;
-      }
-
-      if (step === "f2a") {
-        const nextDraft = {
-          ...draft,
-          f2a: rawText,
-          recoveryCodes: Array.isArray(draft.recoveryCodes) ? draft.recoveryCodes : []
-        };
-
-        setAdminState(ctx.from.id, {
-          mode: ADMIN_MODE.ADD_ACCOUNT_WIZARD,
-          step: "recovery",
-          draft: nextDraft
-        });
-
-        await ctx.reply(buildAddWizardPrompt("recovery", nextDraft), adminInputKeyboard());
-        return;
-      }
-
-      if (step === "recovery") {
-        if (rawText === "/skip") {
-          const saved = finalizeAddAccountWizard(ctx, { ...draft, recoveryCodes: [] });
-          await ctx.reply(`Akun ${saved.username} berhasil ditambahkan ke ready stock.`, adminMenuKeyboard());
-          return;
-        }
-
-        if (rawText === "/done") {
-          const saved = finalizeAddAccountWizard(ctx, draft);
-          await ctx.reply(
-            `Akun ${saved.username} berhasil ditambahkan ke ready stock. Recovery codes: ${(saved.recoveryCodes || []).length}`,
-            adminMenuKeyboard()
-          );
-          return;
-        }
-
-        const incoming = parseRecoveryCodesInput(rawText);
-        if (incoming.length === 0) {
-          await ctx.reply("Recovery codes kosong. Kirim kode valid atau ketik /done untuk selesai.", adminInputKeyboard());
-          return;
-        }
-
-        const merged = Array.from(new Set([...(draft.recoveryCodes || []), ...incoming]));
-        const nextDraft = { ...draft, recoveryCodes: merged };
-
-        setAdminState(ctx.from.id, {
-          mode: ADMIN_MODE.ADD_ACCOUNT_WIZARD,
-          step: "recovery",
-          draft: nextDraft
-        });
-
+      if (!parsed) {
         await ctx.reply(
-          `Recovery codes ditambahkan (${incoming.length} baru, total ${merged.length}). Ketik /done untuk selesai.`,
-          adminInputKeyboard()
+          "Format akun tidak valid. Pastikan ada Username, Password, F2A, dan format sesuai template.",
+          adminMenuKeyboard()
         );
         return;
       }
+
+      const saved = addReadyAccount(parsed);
+      await ctx.reply(`Akun ${saved.username} berhasil ditambahkan ke ready stock.`, adminMenuKeyboard());
+      return;
     }
 
-    if (state === ADMIN_MODE.WAIT_SET_STATUS) {
+    if (state === "ADMIN_WAIT_SET_STATUS") {
       const [username, statusText] = rawText.split(/\s+/);
       clearAdminState(ctx.from.id);
 
@@ -521,7 +474,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    if (state === ADMIN_MODE.WAIT_PARSE_BENEFIT) {
+    if (state === "ADMIN_WAIT_PARSE_BENEFIT") {
       clearAdminState(ctx.from.id);
       const username = rawText.split(/\s+/)[0];
       const parsedStatus = detectBenefitStatusFromSnapshotFile();
@@ -731,13 +684,180 @@ function registerUserHandlers(bot) {
     );
   });
 
+  bot.action("admin_btn_list_accounts", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      "Daftar akun admin. Pilih source akun:",
+      accountListSourceKeyboard()
+    );
+  });
+
+  bot.action("admin_list_src_awaiting", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    const accounts = getAwaitingAccounts();
+    if (accounts.length === 0) {
+      await replyOrEdit(ctx, "Tidak ada akun di source awaiting.", accountListSourceKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      `List akun awaiting (${accounts.length} akun, tampil maks 30):`,
+      accountListKeyboard("awaiting", accounts)
+    );
+  });
+
+  bot.action("admin_list_src_ready", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    const accounts = getReadyAccounts();
+    if (accounts.length === 0) {
+      await replyOrEdit(ctx, "Tidak ada akun di source ready.", accountListSourceKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      `List akun ready (${accounts.length} akun, tampil maks 30):`,
+      accountListKeyboard("ready", accounts)
+    );
+  });
+
+  bot.action(/^admin_open_acc:(awaiting|ready):(.+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const source = ctx.match[1];
+    const accountId = ctx.match[2];
+    const found = getAccountById(accountId);
+
+    await ctx.answerCbQuery();
+    if (!found) {
+      await replyOrEdit(ctx, "Akun tidak ditemukan.", accountListSourceKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      renderAccountDetail(found.account, source),
+      accountDetailKeyboard(accountId, source)
+    );
+  });
+
+  bot.action(/^admin_set_acc_status:(.+):(AWAITING|READY|APPLIED)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const accountId = ctx.match[1];
+    const status = ctx.match[2];
+    const updated = upsertBenefitStatusById(accountId, status);
+    await ctx.answerCbQuery();
+
+    if (!updated.ok) {
+      await replyOrEdit(ctx, "Gagal ubah status akun. Akun tidak ditemukan atau status tidak valid.", adminMenuKeyboard());
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      [
+        `Status akun berhasil diubah.`,
+        `Username: ${updated.account.username}`,
+        `Status benefit: ${updated.account.benefitStatus}`,
+        `Pindah dari: ${updated.previousSource}`,
+        `Menjadi: ${updated.nextSource}`
+      ].join("\n"),
+      adminMenuKeyboard()
+    );
+  });
+
+  bot.action("admin_btn_bulk_check_awaiting", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    const awaiting = getAwaitingAccounts();
+    if (awaiting.length === 0) {
+      await replyOrEdit(ctx, "Tidak ada akun awaiting untuk dicek bulk.", adminMenuKeyboard());
+      return;
+    }
+
+    const parsedStatus = detectBenefitStatusFromSnapshotFile();
+    if (!parsedStatus) {
+      await replyOrEdit(
+        ctx,
+        [
+          "Status tidak terdeteksi dari benefit.html.",
+          "Pastikan snapshot halaman benefit sudah terbaru."
+        ].join("\n"),
+        adminMenuKeyboard()
+      );
+      return;
+    }
+
+    if (parsedStatus === BENEFIT_STATUS.AWAITING) {
+      await replyOrEdit(
+        ctx,
+        [
+          `Bulk check selesai.`,
+          `Snapshot menunjukkan status: ${parsedStatus}`,
+          `Tidak ada akun yang dipindahkan.`
+        ].join("\n"),
+        adminMenuKeyboard()
+      );
+      return;
+    }
+
+    let moved = 0;
+    for (const account of awaiting) {
+      const result = upsertBenefitStatusById(account.id, parsedStatus);
+      if (result.ok) {
+        moved += 1;
+      }
+    }
+
+    const summary = getStockSummary();
+    await replyOrEdit(
+      ctx,
+      [
+        `Bulk check selesai.`,
+        `Snapshot status: ${parsedStatus}`,
+        `Akun dipindahkan dari awaiting: ${moved}`,
+        `Sisa awaiting: ${summary.awaitingCount}`,
+        `Ready: ${summary.readyCount}`
+      ].join("\n"),
+      adminMenuKeyboard()
+    );
+  });
+
   bot.action("admin_btn_cari", async (ctx) => {
     if (!isAdminUser(ctx)) {
       await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
       return;
     }
 
-    setAdminState(ctx.from.id, ADMIN_MODE.WAIT_SEARCH);
+    setAdminState(ctx.from.id, "ADMIN_WAIT_SEARCH");
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
@@ -752,17 +872,19 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    setAdminState(ctx.from.id, {
-      mode: ADMIN_MODE.ADD_ACCOUNT_WIZARD,
-      step: "username",
-      draft: {
-        recoveryCodes: []
-      }
-    });
+    setAdminState(ctx.from.id, "ADMIN_WAIT_ADD_ACCOUNT");
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
-      buildAddWizardPrompt("username", { recoveryCodes: [] }),
+      [
+        "Kirim blok akun dengan format:",
+        "Username: ...",
+        "Password: ...",
+        "F2A: ...",
+        "Recovery Codes:",
+        "code1",
+        "code2"
+      ].join("\n"),
       adminInputKeyboard()
     );
   });
@@ -773,7 +895,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    setAdminState(ctx.from.id, ADMIN_MODE.WAIT_SET_STATUS);
+    setAdminState(ctx.from.id, "ADMIN_WAIT_SET_STATUS");
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
@@ -788,7 +910,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    setAdminState(ctx.from.id, ADMIN_MODE.WAIT_PARSE_BENEFIT);
+    setAdminState(ctx.from.id, "ADMIN_WAIT_PARSE_BENEFIT");
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
