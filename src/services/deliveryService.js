@@ -1,6 +1,7 @@
 const { config } = require("../config/env");
 const { moveReadyAccountsToSoldByIds } = require("./accountService");
 const { markOrderDelivered, markOrderDeliveryAttempt, markOrderDeliveryFailed } = require("./orderService");
+const { notifyOrderCompleted, checkAndNotifyReadyStock } = require("./adminNotificationService");
 
 function buildDeliveryText(order, account) {
   const lines = [
@@ -53,6 +54,11 @@ async function deliverOrderAccounts(bot, order) {
     }
 
     markOrderDelivered(order.id);
+    await notifyOrderCompleted(bot, {
+      ...order,
+      status: "DELIVERED"
+    });
+    await checkAndNotifyReadyStock(bot, { reason: "ORDER_DELIVERED" });
   } catch (error) {
     markOrderDeliveryFailed(order.id, error && error.message ? error.message : "DELIVERY_FAILED");
     return {

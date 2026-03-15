@@ -25,7 +25,8 @@ const config = {
   appPort: Number(process.env.APP_PORT || 3000),
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "http://localhost:3000",
   qrisProvider: process.env.QRIS_PROVIDER || "SIMULATED",
-  paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || "dev-secret"
+  paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || "dev-secret",
+  lowStockThreshold: Number(process.env.LOW_STOCK_THRESHOLD || 3)
 };
 
 module.exports = { config };

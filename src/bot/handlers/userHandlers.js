@@ -22,6 +22,8 @@ const {
 } = require("../../services/orderService");
 const { formatCurrencyIdr, formatStockSummary } = require("../../utils/formatters");
 const { deliverOrderAccounts } = require("../../services/deliveryService");
+const { notifyOrderCreated, checkAndNotifyReadyStock } = require("../../services/adminNotificationService");
+const { getBroadcastAudience } = require("../../services/customerService");
 
 const userCheckoutQty = new Map();
 const adminInputState = new Map();
@@ -93,6 +95,7 @@ function adminMenuKeyboard() {
     [Markup.button.callback("Ubah Status Akun Masal", "admin_btn_mass_status")],
     [Markup.button.callback("Cari Akun", "admin_btn_cari")],
     [Markup.button.callback("Tambah Akun", "admin_btn_tambah")],
+    [Markup.button.callback("Broadcast", "admin_btn_broadcast")],
     [Markup.button.callback("Kembali", "menu_back")]
   ]);
 }
@@ -490,6 +493,8 @@ async function createOrderForUser(ctx, quantity) {
     reservedAccounts: reserved
   });
 
+  await notifyOrderCreated(bot, order);
+
   await replyOrEdit(
     ctx,
     [
@@ -672,7 +677,45 @@ function registerUserHandlers(bot) {
       }
 
       const saved = addReadyAccount(parsed);
+      await checkAndNotifyReadyStock(bot, { reason: "ADMIN_RESTOCK" });
       await ctx.reply(`Akun ${saved.username} berhasil ditambahkan ke ready stock.`, adminMenuKeyboard());
+      return;
+    }
+
+    if (state === "ADMIN_WAIT_BROADCAST") {
+      clearAdminState(ctx.from.id);
+      const audience = getBroadcastAudience();
+      if (audience.length === 0) {
+        await ctx.reply("Belum ada pelanggan untuk broadcast.", adminMenuKeyboard());
+        return;
+      }
+
+      let sent = 0;
+      let failed = 0;
+      for (const target of audience) {
+        try {
+          await bot.telegram.sendMessage(
+            target.telegramId,
+            [
+              "Broadcast dari Admin Store:",
+              rawText
+            ].join("\n\n")
+          );
+          sent += 1;
+        } catch (error) {
+          failed += 1;
+        }
+      }
+
+      await ctx.reply(
+        [
+          "Broadcast selesai.",
+          `Target audience: ${audience.length}`,
+          `Terkirim: ${sent}`,
+          `Gagal: ${failed}`
+        ].join("\n"),
+        adminMenuKeyboard()
+      );
       return;
     }
 
@@ -989,6 +1032,8 @@ function registerUserHandlers(bot) {
       return;
     }
 
+    await checkAndNotifyReadyStock(bot, { reason: "ADMIN_SET_STATUS" });
+
     await replyOrEdit(
       ctx,
       [
@@ -1031,6 +1076,8 @@ function registerUserHandlers(bot) {
       return;
     }
 
+    await checkAndNotifyReadyStock(bot, { reason: "ADMIN_MARK_SOLD" });
+
     await replyOrEdit(
       ctx,
       [
@@ -1058,6 +1105,8 @@ function registerUserHandlers(bot) {
       await replyOrEdit(ctx, "Gagal hapus akun. Akun tidak ditemukan.", adminMenuKeyboard());
       return;
     }
+
+    await checkAndNotifyReadyStock(bot, { reason: "ADMIN_DELETE_ACCOUNT" });
 
     await replyOrEdit(
       ctx,
@@ -1138,6 +1187,8 @@ function registerUserHandlers(bot) {
       await replyOrEdit(ctx, "Gagal hapus akun. Akun tidak ditemukan.", adminMenuKeyboard());
       return;
     }
+
+    await checkAndNotifyReadyStock(bot, { reason: "ADMIN_DELETE_ACCOUNT" });
 
     await replyOrEdit(
       ctx,
@@ -1366,6 +1417,7 @@ function registerUserHandlers(bot) {
 
     await ctx.answerCbQuery();
     clearAdminMassState(ctx.from.id);
+    await checkAndNotifyReadyStock(bot, { reason: "ADMIN_MASS_STATUS" });
 
     const summary = getStockSummary();
     await replyOrEdit(
@@ -1423,6 +1475,24 @@ function registerUserHandlers(bot) {
         "Recovery Codes:",
         "code1",
         "code2"
+      ].join("\n"),
+      adminInputKeyboard()
+    );
+  });
+
+  bot.action("admin_btn_broadcast", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    setAdminState(ctx.from.id, "ADMIN_WAIT_BROADCAST");
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      [
+        "Kirim pesan broadcast untuk pelanggan yang pernah interaksi ke bot.",
+        "Pesan tidak dikirim ke akun admin."
       ].join("\n"),
       adminInputKeyboard()
     );

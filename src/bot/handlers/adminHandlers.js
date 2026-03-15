@@ -6,6 +6,7 @@ const {
   upsertBenefitStatusByUsername,
   BENEFIT_STATUS
 } = require("../../services/accountService");
+const { checkAndNotifyReadyStock } = require("../../services/adminNotificationService");
 const {
   getPendingOrders,
   getRevenueSummary
@@ -175,6 +176,7 @@ function registerAdminHandlers(bot) {
     }
 
     const saved = addReadyAccount(parsed);
+    await checkAndNotifyReadyStock(bot, { reason: "ADMIN_RESTOCK" });
     await ctx.reply(`Akun ${saved.username} berhasil ditambahkan ke ready stock.`);
   });
 
@@ -205,6 +207,8 @@ function registerAdminHandlers(bot) {
       await ctx.reply("Akun tidak ditemukan atau status tidak valid.");
       return;
     }
+
+    await checkAndNotifyReadyStock(bot, { reason: "ADMIN_SET_STATUS" });
 
     await ctx.reply(
       [

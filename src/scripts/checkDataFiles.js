@@ -5,7 +5,9 @@ const files = [
   "list_akun_ready.json",
   "awaiting_benefits.json",
   "terjual.json",
-  path.join("data", "orders.json")
+  path.join("data", "orders.json"),
+  path.join("data", "customers.json"),
+  path.join("data", "stock_alert_state.json")
 ];
 
 function ensureJsonFile(filePath, fallback = []) {
@@ -27,7 +29,10 @@ function ensureJsonFile(filePath, fallback = []) {
 function run() {
   for (const file of files) {
     const full = path.join(process.cwd(), file);
-    ensureJsonFile(full, []);
+    const fallback = file.endsWith("stock_alert_state.json")
+      ? { lastReadyCount: null, lowNotified: false }
+      : [];
+    ensureJsonFile(full, fallback);
   }
 
   console.log("Semua file data valid.");

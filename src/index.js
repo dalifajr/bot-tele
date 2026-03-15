@@ -4,6 +4,8 @@ const { registerUserHandlers } = require("./bot/handlers/userHandlers");
 const { registerAdminHandlers } = require("./bot/handlers/adminHandlers");
 const { startDailyStatusCheck } = require("./services/schedulerService");
 const { startPaymentWebhookServer } = require("./services/paymentWebhookServer");
+const { touchCustomer } = require("./services/customerService");
+const { checkAndNotifyReadyStock } = require("./services/adminNotificationService");
 
 if (!config.botToken) {
   throw new Error("TELEGRAM_BOT_TOKEN belum diisi pada .env");
@@ -11,6 +13,14 @@ if (!config.botToken) {
 
 const bot = new Telegraf(config.botToken);
 let webhookServer = null;
+
+bot.use(async (ctx, next) => {
+  if (ctx.from && ctx.from.id) {
+    touchCustomer(ctx.from);
+  }
+
+  return next();
+});
 
 registerUserHandlers(bot);
 registerAdminHandlers(bot);
@@ -24,6 +34,7 @@ bot.catch((error, ctx) => {
 
 bot.launch().then(() => {
   console.log("Bot started");
+  checkAndNotifyReadyStock(bot, { initializeOnly: true }).catch((error) => console.error(error));
   startDailyStatusCheck(bot);
   webhookServer = startPaymentWebhookServer(bot);
 });

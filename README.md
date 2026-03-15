@@ -20,6 +20,10 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Tombol `Hapus` kini menggunakan konfirmasi 2 langkah (Ya, Hapus / Batal)
 - Daftar akun admin sudah menggunakan pagination (Prev/Next), 10 akun per halaman
 - Menu `Ubah Status Akun Masal` untuk perubahan status banyak akun berdasarkan akun yang dipilih (tidak semua)
+- Notifikasi admin otomatis saat order baru dibuat
+- Notifikasi admin saat order selesai dikirim beserta nominal pendapatan order
+- Notifikasi stok ready menipis dan notifikasi restock/pulih berdasarkan threshold
+- Menu `Broadcast` admin ke semua pelanggan yang pernah interaksi ke bot (non-admin)
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`
 - Flow admin: cek stok, cek pending, cek pendapatan, tambah akun, cari akun, ubah status benefit
 - Webhook pembayaran HMAC untuk menandai order `PAID`
@@ -111,11 +115,13 @@ APP_PORT=3000
 PUBLIC_BASE_URL=http://localhost:3000
 QRIS_PROVIDER=SIMULATED
 PAYMENT_WEBHOOK_SECRET=change-me
+LOW_STOCK_THRESHOLD=3
 ```
 
 Catatan:
 - `ADMIN_TELEGRAM_IDS` bisa lebih dari satu, pisahkan dengan koma.
 - `PAYMENT_WEBHOOK_SECRET` wajib diganti di production.
+- `LOW_STOCK_THRESHOLD` menentukan batas stok ready yang dianggap menipis.
 - Simpan file `.env`, jangan commit ke git.
 
 Catatan perilaku webhook:
@@ -161,9 +167,17 @@ Alur admin via tombol:
 - Pada detail akun tersedia tombol `Set Terjual` untuk memindahkan akun ke `terjual.json`
 - Gunakan `Ubah Status Akun Masal` untuk memilih beberapa akun tertentu lalu ubah status sekaligus
 - Di mode mass status tersedia tombol `Pilih Semua` untuk memilih seluruh akun pada source terpilih
+- Gunakan `Broadcast` untuk kirim pesan massal ke pelanggan yang pernah interaksi
 - Untuk aksi input, gunakan tombol:
   - `Cari Akun` lalu kirim keyword
   - `Tambah Akun` lalu kirim blok akun sesuai format
+  - `Broadcast` lalu kirim isi pesan
+
+Notifikasi otomatis ke admin:
+- Order baru dibuat (order id, customer id, qty, total)
+- Order selesai diproses/dikirim (order id, customer id, nominal pendapatan)
+- Stok ready menipis saat menyentuh threshold
+- Stok ready restock/pulih saat naik kembali di atas threshold
 
 ## Webhook pembayaran
 
@@ -236,6 +250,8 @@ sudo journalctl -u bot-tele -f
 - `awaiting_benefits.json`: akun menunggu coupon applied
 - `terjual.json`: akun terjual
 - `data/orders.json`: data order dan status pembayaran
+- `data/customers.json`: daftar pelanggan yang pernah interaksi (untuk audience broadcast)
+- `data/stock_alert_state.json`: state internal notifikasi stok menipis/restock
 
 ## Utility script
 

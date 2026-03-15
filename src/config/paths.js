@@ -6,6 +6,8 @@ const paths = {
   awaitingAccounts: path.join(process.cwd(), "awaiting_benefits.json"),
   soldAccounts: path.join(process.cwd(), "terjual.json"),
   orders: path.join(config.dataDir, "orders.json"),
+  customers: path.join(config.dataDir, "customers.json"),
+  stockAlertState: path.join(config.dataDir, "stock_alert_state.json"),
   benefitSnapshotHtml: path.join(process.cwd(), "benefit.html")
 };
 
