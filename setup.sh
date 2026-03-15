@@ -313,13 +313,14 @@ main_loop() {
   done
 }
 
-install_bot_command() {
-  sudo tee /usr/local/bin/bot >/dev/null <<EOF
+install_panel_command() {
+  sudo tee /usr/local/bin/panel >/dev/null <<EOF
 #!/usr/bin/env bash
 cd "${PROJECT_DIR}"
 exec bash "${SCRIPT_PATH}" panel
 EOF
-  sudo chmod +x /usr/local/bin/bot
+  sudo chmod +x /usr/local/bin/panel
+  sudo rm -f /usr/local/bin/bot
 }
 
 run_install() {
@@ -343,12 +344,12 @@ run_install() {
   echo "[6/7] Validate/migrate data"
   run_data_check
 
-  echo "[7/7] Install command: bot"
-  install_bot_command
+  echo "[7/7] Install command: panel"
+  install_panel_command
 
   echo "Done"
   echo "Jalankan bot dengan: npm start"
-  echo "Akses panel server cukup ketik: bot"
+  echo "Akses panel server cukup ketik: panel"
 }
 
 ensure_linux_systemd
