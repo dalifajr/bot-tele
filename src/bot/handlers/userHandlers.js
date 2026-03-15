@@ -10,7 +10,6 @@ const {
   getAccountById,
   moveAccountToSoldById,
   upsertBenefitStatusById,
-  upsertBenefitStatusByUsername,
   BENEFIT_STATUS
 } = require("../../services/accountService");
 const {
@@ -22,10 +21,10 @@ const {
 } = require("../../services/orderService");
 const { formatCurrencyIdr, formatStockSummary } = require("../../utils/formatters");
 const { deliverOrderAccounts } = require("../../services/deliveryService");
-const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitHtmlService");
 
 const userCheckoutQty = new Map();
 const adminInputState = new Map();
+const adminMassState = new Map();
 const ACCOUNT_LIST_PAGE_SIZE = 15;
 
 function isAdminUser(ctx) {
@@ -92,8 +91,6 @@ function adminMenuKeyboard() {
     [Markup.button.callback("Ubah Status Akun Masal", "admin_btn_mass_status")],
     [Markup.button.callback("Cari Akun", "admin_btn_cari")],
     [Markup.button.callback("Tambah Akun", "admin_btn_tambah")],
-    [Markup.button.callback("Set Status", "admin_btn_set_status")],
-    [Markup.button.callback("Parse Benefit", "admin_btn_parse_benefit")],
     [Markup.button.callback("Kembali", "menu_back")]
   ]);
 }
@@ -211,44 +208,102 @@ function adminInputKeyboard() {
 
 function adminMassStatusKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Awaiting -> Ready", "admin_mass_status:AWAITING:READY")],
-    [Markup.button.callback("Ready -> Awaiting", "admin_mass_status:READY:AWAITING")],
-    [Markup.button.callback("Awaiting -> Terjual", "admin_mass_status:AWAITING:SOLD")],
-    [Markup.button.callback("Ready -> Terjual", "admin_mass_status:READY:SOLD")],
-    [Markup.button.callback("Terjual -> Ready", "admin_mass_status:SOLD:READY")],
-    [Markup.button.callback("Terjual -> Awaiting", "admin_mass_status:SOLD:AWAITING")],
+    [Markup.button.callback("Source Awaiting", "admin_mass_src:awaiting:1")],
+    [Markup.button.callback("Source Ready", "admin_mass_src:ready:1")],
+    [Markup.button.callback("Source Terjual", "admin_mass_src:sold:1")],
     [Markup.button.callback("Kembali", "menu_admin")]
   ]);
 }
 
-function runMassStatusUpdate(sourceStatus, targetStatus) {
-  const source = String(sourceStatus || "").toUpperCase();
-  const target = String(targetStatus || "").toUpperCase();
+function setAdminMassState(userId, state) {
+  adminMassState.set(String(userId), state);
+}
 
-  const sourceMap = {
-    AWAITING: "awaiting",
-    READY: "ready",
-    SOLD: "sold"
-  };
+function getAdminMassState(userId) {
+  return adminMassState.get(String(userId)) || null;
+}
 
-  const sourceBucket = sourceMap[source];
-  if (!sourceBucket) {
-    return { ok: false, reason: "SOURCE_INVALID" };
+function clearAdminMassState(userId) {
+  adminMassState.delete(String(userId));
+}
+
+function massTargetButtons(state) {
+  const targets = [
+    { label: "Awaiting", value: "AWAITING" },
+    { label: "Ready", value: "READY" },
+    { label: "Terjual", value: "SOLD" }
+  ];
+
+  return targets.map((target) => {
+    const checked = state.target === target.value ? "[x]" : "[ ]";
+    return Markup.button.callback(
+      `${checked} ${target.label}`,
+      `admin_mass_target:${state.source}:${target.value}`
+    );
+  });
+}
+
+function massAccountListKeyboard(source, accounts, page, state) {
+  const currentPage = clampPage(page, accounts.length);
+  const start = (currentPage - 1) * ACCOUNT_LIST_PAGE_SIZE;
+  const end = start + ACCOUNT_LIST_PAGE_SIZE;
+  const visible = accounts.slice(start, end);
+
+  const rows = visible.map((account) => {
+    const selected = state.selectedIds.has(account.id) ? "[x]" : "[ ]";
+    return [
+      Markup.button.callback(
+        `${selected} ${shortAccountLabel(account)}`,
+        `admin_mass_toggle:${source}:${currentPage}:${account.id}`
+      )
+    ];
+  });
+
+  const totalPages = Math.max(1, Math.ceil(accounts.length / ACCOUNT_LIST_PAGE_SIZE));
+  if (totalPages > 1) {
+    const navRow = [];
+    if (currentPage > 1) {
+      navRow.push(Markup.button.callback("Prev", `admin_mass_src:${source}:${currentPage - 1}`));
+    }
+    navRow.push(Markup.button.callback(`${currentPage}/${totalPages}`, "admin_page_noop"));
+    if (currentPage < totalPages) {
+      navRow.push(Markup.button.callback("Next", `admin_mass_src:${source}:${currentPage + 1}`));
+    }
+    rows.push(navRow);
   }
 
-  const accounts = getAccountsBySource(sourceBucket);
+  rows.push(massTargetButtons(state));
+  rows.push([
+    Markup.button.callback("Terapkan ke Akun Terpilih", `admin_mass_apply:${source}:${currentPage}`)
+  ]);
+  rows.push([
+    Markup.button.callback("Reset Pilihan", `admin_mass_reset:${source}:${currentPage}`),
+    Markup.button.callback("Kembali", "admin_btn_mass_status")
+  ]);
+
+  return Markup.inlineKeyboard(rows);
+}
+
+function runMassStatusUpdateByIds(selectedIds, targetStatus) {
+  const ids = Array.from(selectedIds || []);
+  const target = String(targetStatus || "").toUpperCase();
+
+  if (ids.length === 0) {
+    return { ok: false, reason: "NO_SELECTED_ACCOUNT" };
+  }
+
   let success = 0;
   let failed = 0;
 
-  for (const account of accounts) {
+  for (const accountId of ids) {
     let result;
     if (target === "SOLD") {
-      result = moveAccountToSoldById(account.id, {
+      result = moveAccountToSoldById(accountId, {
         orderId: `ADMIN-MASS-${Date.now()}`,
         pricePerAccount: config.productPriceIdr
       });
     } else {
-      result = upsertBenefitStatusById(account.id, target);
+      result = upsertBenefitStatusById(accountId, target);
     }
 
     if (result && result.ok) {
@@ -260,9 +315,8 @@ function runMassStatusUpdate(sourceStatus, targetStatus) {
 
   return {
     ok: true,
-    source,
     target,
-    total: accounts.length,
+    total: ids.length,
     success,
     failed
   };
@@ -548,71 +602,8 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    if (state === "ADMIN_WAIT_SET_STATUS") {
-      const [username, statusText] = rawText.split(/\s+/);
-      clearAdminState(ctx.from.id);
-
-      const statusMap = {
-        awaiting: BENEFIT_STATUS.AWAITING,
-        ready: BENEFIT_STATUS.READY
-      };
-
-      const nextStatus = statusMap[String(statusText || "").toLowerCase()];
-      if (!username || !nextStatus) {
-        await ctx.reply(
-          "Format salah. Gunakan: <username> <awaiting|ready>",
-          adminMenuKeyboard()
-        );
-        return;
-      }
-
-      const updated = upsertBenefitStatusByUsername(username, nextStatus);
-      if (!updated.ok) {
-        await ctx.reply("Akun tidak ditemukan atau status tidak valid.", adminMenuKeyboard());
-        return;
-      }
-
-      await ctx.reply(
-        [
-          `Akun ${updated.account.username} berhasil diupdate.`,
-          `Status benefit: ${updated.account.benefitStatus}`,
-          `Pindah dari: ${updated.previousSource}`,
-          `Menjadi: ${updated.nextSource}`
-        ].join("\n"),
-        adminMenuKeyboard()
-      );
-      return;
-    }
-
-    if (state === "ADMIN_WAIT_PARSE_BENEFIT") {
-      clearAdminState(ctx.from.id);
-      const username = rawText.split(/\s+/)[0];
-      const parsedStatus = detectBenefitStatusFromSnapshotFile();
-
-      if (!username) {
-        await ctx.reply("Username wajib diisi.", adminMenuKeyboard());
-        return;
-      }
-
-      if (!parsedStatus) {
-        await ctx.reply("Status tidak terdeteksi dari benefit.html", adminMenuKeyboard());
-        return;
-      }
-
-      const updated = upsertBenefitStatusByUsername(username, parsedStatus);
-      if (!updated.ok) {
-        await ctx.reply("Akun tidak ditemukan untuk username tersebut.", adminMenuKeyboard());
-        return;
-      }
-
-      await ctx.reply(
-        [
-          `Snapshot benefit berhasil diproses untuk ${updated.account.username}.`,
-          `Status baru: ${updated.account.benefitStatus}`,
-          "Source data: benefit.html"
-        ].join("\n"),
-        adminMenuKeyboard()
-      );
+    if (typeof next === "function") {
+      return next();
     }
   });
 
@@ -716,6 +707,7 @@ function registerUserHandlers(bot) {
     }
 
     clearAdminState(ctx.from.id);
+    clearAdminMassState(ctx.from.id);
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
@@ -735,6 +727,7 @@ function registerUserHandlers(bot) {
     }
 
     clearAdminState(ctx.from.id);
+    clearAdminMassState(ctx.from.id);
     await ctx.answerCbQuery("Input dibatalkan");
     await replyOrEdit(ctx, "Input admin dibatalkan.", adminMenuKeyboard());
   });
@@ -934,14 +927,89 @@ function registerUserHandlers(bot) {
     }
 
     await ctx.answerCbQuery();
+    clearAdminMassState(ctx.from.id);
     await replyOrEdit(
       ctx,
-      "Pilih skenario ubah status akun masal:",
+      "Pilih source akun untuk ubah status massal (pilih akun tertentu):",
       adminMassStatusKeyboard()
     );
   });
 
-  bot.action(/^admin_mass_status:(AWAITING|READY|SOLD):(AWAITING|READY|SOLD)$/, async (ctx) => {
+  bot.action(/^admin_mass_src:(awaiting|ready|sold):(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const source = ctx.match[1];
+    const requestedPage = Number(ctx.match[2]);
+    const accounts = getAccountsBySource(source);
+    const currentPage = clampPage(requestedPage, accounts.length);
+
+    let state = getAdminMassState(ctx.from.id);
+    if (!state || state.source !== source) {
+      state = {
+        source,
+        selectedIds: new Set(),
+        target: "READY"
+      };
+      setAdminMassState(ctx.from.id, state);
+    }
+
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      [
+        `Ubah Status Akun Masal`,
+        `Source: ${source}`,
+        `Dipilih: ${state.selectedIds.size} akun`,
+        `Target: ${state.target}`,
+        `Total source: ${accounts.length}`
+      ].join("\n"),
+      massAccountListKeyboard(source, accounts, currentPage, state)
+    );
+  });
+
+  bot.action(/^admin_mass_toggle:(awaiting|ready|sold):(\d+):(.+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const source = ctx.match[1];
+    const page = Number(ctx.match[2]);
+    const accountId = ctx.match[3];
+    const state = getAdminMassState(ctx.from.id);
+
+    if (!state || state.source !== source) {
+      await ctx.answerCbQuery("Pilih source mass status dulu", { show_alert: true });
+      return;
+    }
+
+    if (state.selectedIds.has(accountId)) {
+      state.selectedIds.delete(accountId);
+    } else {
+      state.selectedIds.add(accountId);
+    }
+
+    setAdminMassState(ctx.from.id, state);
+    await ctx.answerCbQuery();
+
+    const accounts = getAccountsBySource(source);
+    await replyOrEdit(
+      ctx,
+      [
+        `Ubah Status Akun Masal`,
+        `Source: ${source}`,
+        `Dipilih: ${state.selectedIds.size} akun`,
+        `Target: ${state.target}`,
+        `Total source: ${accounts.length}`
+      ].join("\n"),
+      massAccountListKeyboard(source, accounts, page, state)
+    );
+  });
+
+  bot.action(/^admin_mass_target:(awaiting|ready|sold):(AWAITING|READY|SOLD)$/, async (ctx) => {
     if (!isAdminUser(ctx)) {
       await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
       return;
@@ -949,25 +1017,93 @@ function registerUserHandlers(bot) {
 
     const source = ctx.match[1];
     const target = ctx.match[2];
+    const state = getAdminMassState(ctx.from.id);
 
-    if (source === target) {
-      await ctx.answerCbQuery("Source dan target sama", { show_alert: true });
+    if (!state || state.source !== source) {
+      await ctx.answerCbQuery("Pilih source mass status dulu", { show_alert: true });
+      return;
+    }
+
+    state.target = target;
+    setAdminMassState(ctx.from.id, state);
+    await ctx.answerCbQuery(`Target set ke ${target}`);
+
+    const accounts = getAccountsBySource(source);
+    await replyOrEdit(
+      ctx,
+      [
+        `Ubah Status Akun Masal`,
+        `Source: ${source}`,
+        `Dipilih: ${state.selectedIds.size} akun`,
+        `Target: ${state.target}`,
+        `Total source: ${accounts.length}`
+      ].join("\n"),
+      massAccountListKeyboard(source, accounts, 1, state)
+    );
+  });
+
+  bot.action(/^admin_mass_reset:(awaiting|ready|sold):(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const source = ctx.match[1];
+    const page = Number(ctx.match[2]);
+    const state = getAdminMassState(ctx.from.id);
+
+    if (!state || state.source !== source) {
+      await ctx.answerCbQuery("Pilih source mass status dulu", { show_alert: true });
+      return;
+    }
+
+    state.selectedIds = new Set();
+    setAdminMassState(ctx.from.id, state);
+    await ctx.answerCbQuery("Pilihan akun direset");
+
+    const accounts = getAccountsBySource(source);
+    await replyOrEdit(
+      ctx,
+      [
+        `Ubah Status Akun Masal`,
+        `Source: ${source}`,
+        `Dipilih: ${state.selectedIds.size} akun`,
+        `Target: ${state.target}`,
+        `Total source: ${accounts.length}`
+      ].join("\n"),
+      massAccountListKeyboard(source, accounts, page, state)
+    );
+  });
+
+  bot.action(/^admin_mass_apply:(awaiting|ready|sold):(\d+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const source = ctx.match[1];
+    const state = getAdminMassState(ctx.from.id);
+
+    if (!state || state.source !== source) {
+      await ctx.answerCbQuery("Pilih source mass status dulu", { show_alert: true });
+      return;
+    }
+
+    const result = runMassStatusUpdateByIds(state.selectedIds, state.target);
+    if (!result.ok) {
+      await ctx.answerCbQuery("Belum ada akun terpilih", { show_alert: true });
       return;
     }
 
     await ctx.answerCbQuery();
-    const result = runMassStatusUpdate(source, target);
-    if (!result.ok) {
-      await replyOrEdit(ctx, "Gagal menjalankan status masal.", adminMenuKeyboard());
-      return;
-    }
+    clearAdminMassState(ctx.from.id);
 
     const summary = getStockSummary();
     await replyOrEdit(
       ctx,
       [
         "Ubah status masal selesai.",
-        `Source: ${result.source}`,
+        `Source: ${source}`,
         `Target: ${result.target}`,
         `Diproses: ${result.total}`,
         `Berhasil: ${result.success}`,
@@ -1023,35 +1159,6 @@ function registerUserHandlers(bot) {
     );
   });
 
-  bot.action("admin_btn_set_status", async (ctx) => {
-    if (!isAdminUser(ctx)) {
-      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
-      return;
-    }
-
-    setAdminState(ctx.from.id, "ADMIN_WAIT_SET_STATUS");
-    await ctx.answerCbQuery();
-    await replyOrEdit(
-      ctx,
-      "Kirim format: <username> <awaiting|ready>",
-      adminInputKeyboard()
-    );
-  });
-
-  bot.action("admin_btn_parse_benefit", async (ctx) => {
-    if (!isAdminUser(ctx)) {
-      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
-      return;
-    }
-
-    setAdminState(ctx.from.id, "ADMIN_WAIT_PARSE_BENEFIT");
-    await ctx.answerCbQuery();
-    await replyOrEdit(
-      ctx,
-      "Kirim username akun untuk di-update berdasarkan snapshot benefit.html.",
-      adminInputKeyboard()
-    );
-  });
 }
 
 module.exports = {

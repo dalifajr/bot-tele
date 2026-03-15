@@ -14,10 +14,10 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Menu berbasis tombol (inline keyboard) untuk alur utama user
 - Checkout dengan tombol `-` dan `+` untuk atur quantity
 - Tombol `Menu Admin` otomatis tampil untuk Telegram ID admin terdaftar
-- Wizard admin berbasis tombol untuk cari akun, tambah akun, set status, dan parse benefit
+- Wizard admin berbasis tombol untuk cari akun dan tambah akun
 - Menu `Daftar Akun` admin: pilih source `awaiting`/`ready`/`sold`, klik akun untuk lihat detail lengkap, lalu ubah status via tombol
 - Daftar akun admin sudah menggunakan pagination (Prev/Next)
-- Menu `Ubah Status Akun Masal` untuk perubahan status banyak akun sekaligus
+- Menu `Ubah Status Akun Masal` untuk perubahan status banyak akun berdasarkan akun yang dipilih (tidak semua)
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`
 - Flow admin: cek stok, cek pending, cek pendapatan, tambah akun, cari akun, ubah status benefit
 - Webhook pembayaran HMAC untuk menandai order `PAID`
@@ -149,20 +149,18 @@ Admin:
 - `/admin_pendapatan`
 - `/admin_cari <username>`
 - `/admin_tambah <blok akun>`
-- `/admin_set_status <username> <awaiting|ready>`
-- `/admin_parse_benefit <username>`
+- `/admin_set_status <username> <awaiting|ready>` (opsional via command)
+- `/admin_parse_benefit <username>` (opsional via command)
 
 Alur admin via tombol:
 - Dari `/start` klik `Menu Admin`
 - Pilih aksi cepat: cek stok, cek pending, cek pendapatan
 - Gunakan `Daftar Akun` untuk melihat list akun awaiting/ready/sold (dengan pagination) lalu klik akun untuk detail + tombol ubah status
 - Pada detail akun tersedia tombol `Set Terjual` untuk memindahkan akun ke `terjual.json`
-- Gunakan `Ubah Status Akun Masal` untuk perpindahan status massal antar source akun
+- Gunakan `Ubah Status Akun Masal` untuk memilih beberapa akun tertentu lalu ubah status sekaligus
 - Untuk aksi input, gunakan tombol:
   - `Cari Akun` lalu kirim keyword
   - `Tambah Akun` lalu kirim blok akun sesuai format
-  - `Set Status` lalu kirim `<username> <awaiting|ready>`
-  - `Parse Benefit` lalu kirim `<username>`
 
 ## Webhook pembayaran
 
