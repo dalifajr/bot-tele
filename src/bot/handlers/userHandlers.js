@@ -7,6 +7,7 @@ const {
   addReadyAccount,
   findByUsername,
   getAccountById,
+  moveAccountToSoldById,
   upsertBenefitStatusById,
   upsertBenefitStatusByUsername,
   BENEFIT_STATUS
@@ -119,15 +120,27 @@ function accountListKeyboard(source, accounts) {
 }
 
 function accountDetailKeyboard(accountId, source) {
-  return Markup.inlineKeyboard([
+  const rows = [
     [
       Markup.button.callback("Set Awaiting", `admin_set_acc_status:${accountId}:AWAITING`),
       Markup.button.callback("Set Ready", `admin_set_acc_status:${accountId}:READY`)
     ],
-    [Markup.button.callback("Set Applied", `admin_set_acc_status:${accountId}:APPLIED`)],
-    [Markup.button.callback("Kembali ke List", source === "awaiting" ? "admin_list_src_awaiting" : "admin_list_src_ready")],
-    [Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]
+    [Markup.button.callback("Set Applied", `admin_set_acc_status:${accountId}:APPLIED`)]
+  ];
+
+  if (source !== "sold") {
+    rows.push([Markup.button.callback("Set Terjual", `admin_mark_sold:${accountId}`)]);
+  }
+
+  rows.push([
+    Markup.button.callback(
+      "Kembali ke List",
+      source === "awaiting" ? "admin_list_src_awaiting" : "admin_list_src_ready"
+    )
   ]);
+  rows.push([Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]);
+
+  return Markup.inlineKeyboard(rows);
 }
 
 function renderAccountDetail(account, source) {
@@ -785,6 +798,47 @@ function registerUserHandlers(bot) {
         `Status benefit: ${updated.account.benefitStatus}`,
         `Pindah dari: ${updated.previousSource}`,
         `Menjadi: ${updated.nextSource}`
+      ].join("\n"),
+      adminMenuKeyboard()
+    );
+  });
+
+  bot.action(/^admin_mark_sold:(.+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const accountId = ctx.match[1];
+    const moved = moveAccountToSoldById(accountId, {
+      telegramId: ctx.from?.id || null,
+      orderId: `ADMIN-MARK-${Date.now()}`,
+      pricePerAccount: config.productPriceIdr
+    });
+
+    await ctx.answerCbQuery();
+
+    if (!moved.ok) {
+      await replyOrEdit(ctx, "Gagal set akun menjadi terjual. Akun tidak ditemukan.", adminMenuKeyboard());
+      return;
+    }
+
+    if (moved.alreadySold) {
+      await replyOrEdit(
+        ctx,
+        `Akun ${moved.account.username} sudah berada pada status terjual.`,
+        adminMenuKeyboard()
+      );
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      [
+        "Status akun berhasil diubah.",
+        `Username: ${moved.account.username}`,
+        `Pindah dari: ${moved.previousSource}`,
+        "Menjadi: sold"
       ].join("\n"),
       adminMenuKeyboard()
     );

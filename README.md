@@ -155,6 +155,7 @@ Alur admin via tombol:
 - Dari `/start` klik `Menu Admin`
 - Pilih aksi cepat: cek stok, cek pending, cek pendapatan
 - Gunakan `Daftar Akun` untuk melihat list akun awaiting/ready lalu klik akun untuk detail + tombol ubah status
+- Pada detail akun tersedia tombol `Set Terjual` untuk memindahkan akun ke `terjual.json`
 - Gunakan `Bulk Cek Awaiting` untuk pengecekan massal status awaiting (berdasarkan snapshot `benefit.html`)
 - Untuk aksi input, gunakan tombol:
   - `Cari Akun` lalu kirim keyword

@@ -110,6 +110,66 @@ function moveReadyAccountsToSoldByIds(accountIds, orderInfo) {
   return moveAccountsToSold(picked, orderInfo);
 }
 
+function moveAccountToSoldById(accountId, orderInfo = {}) {
+  const needle = String(accountId || "").trim();
+  if (!needle) {
+    return { ok: false, reason: "ACCOUNT_ID_REQUIRED" };
+  }
+
+  const ready = getReadyAccounts();
+  const awaiting = getAwaitingAccounts();
+  const sold = getSoldAccounts();
+
+  const soldExisting = sold.find((item) => String(item.id) === needle);
+  if (soldExisting) {
+    return { ok: true, alreadySold: true, account: soldExisting };
+  }
+
+  let source = null;
+  let picked = null;
+
+  const takeFrom = (list, sourceName) => {
+    const idx = list.findIndex((item) => String(item.id) === needle);
+    if (idx === -1) {
+      return null;
+    }
+
+    source = sourceName;
+    const [item] = list.splice(idx, 1);
+    return item;
+  };
+
+  picked = takeFrom(ready, "ready") || takeFrom(awaiting, "awaiting");
+
+  if (!picked) {
+    return { ok: false, reason: "NOT_FOUND" };
+  }
+
+  const now = new Date().toISOString();
+  const soldItem = {
+    ...picked,
+    soldAt: now,
+    soldToTelegramId: orderInfo.telegramId || null,
+    soldOrderId: orderInfo.orderId || null,
+    soldPrice: Number.isFinite(Number(orderInfo.pricePerAccount)) ? Number(orderInfo.pricePerAccount) : null,
+    benefitUpdatedAt: picked.benefitUpdatedAt || now
+  };
+
+  sold.push(soldItem);
+
+  writeJson(paths.readyAccounts, ready);
+  writeJson(paths.awaitingAccounts, awaiting);
+  writeJson(paths.soldAccounts, sold);
+
+  return {
+    ok: true,
+    alreadySold: false,
+    account: soldItem,
+    previousSource: source,
+    nextSource: "sold"
+  };
+}
+
 function findByUsername(username) {
   const needle = String(username || "").toLowerCase().trim();
 
@@ -335,6 +395,7 @@ module.exports = {
   reserveReadyAccounts,
   moveAccountsToSold,
   moveReadyAccountsToSoldByIds,
+  moveAccountToSoldById,
   getAccountById,
   findByUsername,
   upsertBenefitStatusById,
