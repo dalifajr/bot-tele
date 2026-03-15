@@ -38,15 +38,14 @@ Script ini akan:
 - Install dependency project
 - Membuat `.env` dari `.env.example`
 - Menjalankan validasi/migrasi data awal
-- Menyiapkan panel maintenance server
+- Menyiapkan command panel maintenance `bot`
 
 ## Panel menu server (Ubuntu)
 
-Untuk memudahkan setting dan maintenance, jalankan:
+Untuk memudahkan setting dan maintenance, setelah instalasi cukup jalankan:
 
 ```bash
-chmod +x install/bot-panel.sh
-./install/bot-panel.sh
+bot
 ```
 
 Menu panel menyediakan:
@@ -61,6 +60,10 @@ Menu panel menyediakan:
 - Update project dari git (`git pull --ff-only`)
 
 Panel ini dirancang untuk server dengan systemd (Ubuntu production).
+
+Catatan:
+- Panel sekarang menyatu dalam `setup.sh` (mode panel).
+- Command global `bot` otomatis dibuat ke `/usr/local/bin/bot` saat instalasi selesai.
 
 ## Instalasi manual (opsional)
 
