@@ -66,13 +66,13 @@ function setQty(userId, qty) {
 
 function mainMenuKeyboard(isAdmin) {
   const rows = [
-    [Markup.button.callback("Lihat Produk", "menu_produk")],
-    [Markup.button.callback("Checkout", "menu_checkout")],
-    [Markup.button.callback("Status Order Terakhir", "menu_last_status")]
+    [Markup.button.callback("🛍️ Lihat Produk", "menu_produk")],
+    [Markup.button.callback("🧾 Checkout", "menu_checkout")],
+    [Markup.button.callback("📦 Status Order Terakhir", "menu_last_status")]
   ];
 
   if (isAdmin) {
-    rows.push([Markup.button.callback("Menu Admin", "menu_admin")]);
+    rows.push([Markup.button.callback("🛠️ Menu Admin", "menu_admin")]);
   }
 
   return Markup.inlineKeyboard(rows);
@@ -82,52 +82,52 @@ function checkoutKeyboard(userId) {
   const qty = getQty(userId);
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback("-", "checkout_dec"),
+      Markup.button.callback("⬅️", "checkout_dec"),
       Markup.button.callback(`Qty: ${qty}`, "checkout_qty_noop"),
-      Markup.button.callback("+", "checkout_inc")
+      Markup.button.callback("➡️", "checkout_inc")
     ],
-    [Markup.button.callback("Buat Order", "checkout_confirm")],
-    [Markup.button.callback("Kembali", "menu_back")]
+    [Markup.button.callback("✅ Buat Order", "checkout_confirm")],
+    [Markup.button.callback("🔙 Kembali", "menu_back")]
   ]);
 }
 
 function adminMenuKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Cek Stok", "admin_btn_stok")],
-    [Markup.button.callback("Cek Pending", "admin_btn_pending")],
-    [Markup.button.callback("Cek Pendapatan", "admin_btn_pendapatan")],
-    [Markup.button.callback("Daftar Akun", "admin_btn_list_accounts")],
-    [Markup.button.callback("Ubah Status Akun Masal", "admin_btn_mass_status")],
-    [Markup.button.callback("Cari Akun", "admin_btn_cari")],
-    [Markup.button.callback("Tambah Akun", "admin_btn_tambah")],
-    [Markup.button.callback("Broadcast", "admin_btn_broadcast")],
-    [Markup.button.callback("Kembali", "menu_back")]
+    [Markup.button.callback("📦 Cek Stok", "admin_btn_stok")],
+    [Markup.button.callback("⏳ Cek Pending", "admin_btn_pending")],
+    [Markup.button.callback("💰 Cek Pendapatan", "admin_btn_pendapatan")],
+    [Markup.button.callback("📋 Daftar Akun", "admin_btn_list_accounts")],
+    [Markup.button.callback("🧩 Ubah Status Akun Masal", "admin_btn_mass_status")],
+    [Markup.button.callback("🔎 Cari Akun", "admin_btn_cari")],
+    [Markup.button.callback("➕ Tambah Akun", "admin_btn_tambah")],
+    [Markup.button.callback("📣 Broadcast", "admin_btn_broadcast")],
+    [Markup.button.callback("🔙 Kembali", "menu_back")]
   ]);
 }
 
 function adminRevenueKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Reset Pendapatan", "admin_rev_reset_prompt")],
-    [Markup.button.callback("Kembali", "menu_admin")]
+    [Markup.button.callback("♻️ Reset Pendapatan", "admin_rev_reset_prompt")],
+    [Markup.button.callback("🔙 Kembali", "menu_admin")]
   ]);
 }
 
 function adminRevenueResetConfirmKeyboard() {
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback("Ya, Reset", "admin_rev_reset_confirm"),
-      Markup.button.callback("Batal", "admin_rev_reset_cancel")
+      Markup.button.callback("✅ Ya, Reset", "admin_rev_reset_confirm"),
+      Markup.button.callback("❌ Batal", "admin_rev_reset_cancel")
     ],
-    [Markup.button.callback("Kembali", "menu_admin")]
+    [Markup.button.callback("🔙 Kembali", "menu_admin")]
   ]);
 }
 
 function accountListSourceKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Awaiting", "admin_list_src:awaiting:1")],
-    [Markup.button.callback("Ready", "admin_list_src:ready:1")],
-    [Markup.button.callback("Terjual", "admin_list_src:sold:1")],
-    [Markup.button.callback("Kembali", "menu_admin")]
+    [Markup.button.callback("🕒 Awaiting", "admin_list_src:awaiting:1")],
+    [Markup.button.callback("✅ Ready", "admin_list_src:ready:1")],
+    [Markup.button.callback("🛒 Terjual", "admin_list_src:sold:1")],
+    [Markup.button.callback("🔙 Kembali", "menu_admin")]
   ]);
 }
 
@@ -170,40 +170,40 @@ function accountListKeyboard(source, accounts, page) {
   if (totalPages > 1) {
     const navRow = [];
     if (currentPage > 1) {
-      navRow.push(Markup.button.callback("Prev", `admin_list_src:${source}:${currentPage - 1}`));
+      navRow.push(Markup.button.callback("⬅️", `admin_list_src:${source}:${currentPage - 1}`));
     }
     navRow.push(Markup.button.callback(`${currentPage}/${totalPages}`, "admin_page_noop"));
     if (currentPage < totalPages) {
-      navRow.push(Markup.button.callback("Next", `admin_list_src:${source}:${currentPage + 1}`));
+      navRow.push(Markup.button.callback("➡️", `admin_list_src:${source}:${currentPage + 1}`));
     }
     rows.push(navRow);
   }
 
-  rows.push([Markup.button.callback("Kembali", "admin_btn_list_accounts")]);
+  rows.push([Markup.button.callback("🔙 Kembali", "admin_btn_list_accounts")]);
   return Markup.inlineKeyboard(rows);
 }
 
 function accountDetailKeyboard(accountId, source, page, backCallback) {
   const rows = [
     [
-      Markup.button.callback("Set Awaiting", `admin_set_acc_status:${accountId}:AWAITING`),
-      Markup.button.callback("Set Ready", `admin_set_acc_status:${accountId}:READY`)
+      Markup.button.callback("🕒 Set Awaiting", `admin_set_acc_status:${accountId}:AWAITING`),
+      Markup.button.callback("✅ Set Ready", `admin_set_acc_status:${accountId}:READY`)
     ]
   ];
 
   if (source !== "sold") {
-    rows.push([Markup.button.callback("Set Terjual", `admin_mark_sold:${accountId}`)]);
+    rows.push([Markup.button.callback("🛒 Set Terjual", `admin_mark_sold:${accountId}`)]);
   }
 
-  rows.push([Markup.button.callback("Hapus", `admin_delete_acc_prompt:${accountId}:${source}:${page || 1}`)]);
+  rows.push([Markup.button.callback("🗑️ Hapus", `admin_delete_acc_prompt:${accountId}:${source}:${page || 1}`)]);
 
   rows.push([
     Markup.button.callback(
-      "Kembali ke List",
+      "🔙 Kembali ke List",
       backCallback || `admin_list_src:${source}:${page || 1}`
     )
   ]);
-  rows.push([Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]);
+  rows.push([Markup.button.callback("🛠️ Menu Admin", "menu_admin")]);
 
   return Markup.inlineKeyboard(rows);
 }
@@ -211,10 +211,10 @@ function accountDetailKeyboard(accountId, source, page, backCallback) {
 function accountDeleteConfirmKeyboard(accountId, source, page) {
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback("Ya, Hapus", `admin_delete_acc_confirm:${accountId}:${source}:${page || 1}`),
-      Markup.button.callback("Batal", `admin_delete_acc_cancel:${accountId}:${source}:${page || 1}`)
+      Markup.button.callback("✅ Ya, Hapus", `admin_delete_acc_confirm:${accountId}:${source}:${page || 1}`),
+      Markup.button.callback("❌ Batal", `admin_delete_acc_cancel:${accountId}:${source}:${page || 1}`)
     ],
-    [Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]
+    [Markup.button.callback("🛠️ Menu Admin", "menu_admin")]
   ]);
 }
 
@@ -258,17 +258,17 @@ function renderOrderStatusText(order) {
 
 function adminInputKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Batal", "admin_input_cancel")],
-    [Markup.button.callback("Kembali ke Admin Menu", "menu_admin")]
+    [Markup.button.callback("❌ Batal", "admin_input_cancel")],
+    [Markup.button.callback("🛠️ Menu Admin", "menu_admin")]
   ]);
 }
 
 function adminMassStatusKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Source Awaiting", "admin_mass_src:awaiting:1")],
-    [Markup.button.callback("Source Ready", "admin_mass_src:ready:1")],
-    [Markup.button.callback("Source Terjual", "admin_mass_src:sold:1")],
-    [Markup.button.callback("Kembali", "menu_admin")]
+    [Markup.button.callback("🕒 Source Awaiting", "admin_mass_src:awaiting:1")],
+    [Markup.button.callback("✅ Source Ready", "admin_mass_src:ready:1")],
+    [Markup.button.callback("🛒 Source Terjual", "admin_mass_src:sold:1")],
+    [Markup.button.callback("🔙 Kembali", "menu_admin")]
   ]);
 }
 
@@ -313,18 +313,18 @@ function searchResultKeyboard(results, page) {
   if (totalPages > 1) {
     const navRow = [];
     if (currentPage > 1) {
-      navRow.push(Markup.button.callback("Prev", `admin_search_page:${currentPage - 1}`));
+      navRow.push(Markup.button.callback("⬅️", `admin_search_page:${currentPage - 1}`));
     }
     navRow.push(Markup.button.callback(`${currentPage}/${totalPages}`, "admin_page_noop"));
     if (currentPage < totalPages) {
-      navRow.push(Markup.button.callback("Next", `admin_search_page:${currentPage + 1}`));
+      navRow.push(Markup.button.callback("➡️", `admin_search_page:${currentPage + 1}`));
     }
     rows.push(navRow);
   }
 
   rows.push([
-    Markup.button.callback("Cari Lagi", "admin_btn_cari"),
-    Markup.button.callback("Kembali", "menu_admin")
+    Markup.button.callback("🔎 Cari Lagi", "admin_btn_cari"),
+    Markup.button.callback("🔙 Kembali", "menu_admin")
   ]);
 
   return Markup.inlineKeyboard(rows);
@@ -366,11 +366,11 @@ function massAccountListKeyboard(source, accounts, page, state) {
   if (totalPages > 1) {
     const navRow = [];
     if (currentPage > 1) {
-      navRow.push(Markup.button.callback("Prev", `admin_mass_src:${source}:${currentPage - 1}`));
+      navRow.push(Markup.button.callback("⬅️", `admin_mass_src:${source}:${currentPage - 1}`));
     }
     navRow.push(Markup.button.callback(`${currentPage}/${totalPages}`, "admin_page_noop"));
     if (currentPage < totalPages) {
-      navRow.push(Markup.button.callback("Next", `admin_mass_src:${source}:${currentPage + 1}`));
+      navRow.push(Markup.button.callback("➡️", `admin_mass_src:${source}:${currentPage + 1}`));
     }
     rows.push(navRow);
   }
@@ -383,11 +383,11 @@ function massAccountListKeyboard(source, accounts, page, state) {
     )
   ]);
   rows.push([
-    Markup.button.callback("Terapkan ke Akun Terpilih", `admin_mass_apply:${source}:${currentPage}`)
+    Markup.button.callback("✅ Terapkan ke Akun Terpilih", `admin_mass_apply:${source}:${currentPage}`)
   ]);
   rows.push([
-    Markup.button.callback("Reset Pilihan", `admin_mass_reset:${source}:${currentPage}`),
-    Markup.button.callback("Kembali", "admin_btn_mass_status")
+    Markup.button.callback("♻️ Reset Pilihan", `admin_mass_reset:${source}:${currentPage}`),
+    Markup.button.callback("🔙 Kembali", "admin_btn_mass_status")
   ]);
 
   return Markup.inlineKeyboard(rows);
@@ -485,15 +485,15 @@ async function sendMainMenu(ctx) {
   const isAdmin = isAdminUser(ctx);
   await ctx.reply(
     [
-      `Selamat datang di ${config.storeName}.`,
+      `👋 Selamat datang di ${config.storeName}.`,
       "",
-      `Produk: ${config.productName}`,
-      `Harga per akun: ${formatCurrencyIdr(config.productPriceIdr)}`,
+      `🧩 Produk: ${config.productName}`,
+      `💵 Harga per akun: ${formatCurrencyIdr(config.productPriceIdr)}`,
       formatStockSummary(stock),
       "",
       isAdmin
-        ? "Akses: ADMIN"
-        : "Akses: CUSTOMER",
+        ? "🛠️ Akses: ADMIN"
+        : "🙋 Akses: CUSTOMER",
       "Pilih menu di bawah untuk lanjut."
     ].join("\n"),
     mainMenuKeyboard(isAdmin)
@@ -541,21 +541,21 @@ async function createOrderForUser(bot, ctx, quantity) {
   await replyOrEdit(
     ctx,
     [
-      "Pesanan berhasil dibuat",
-      `Order ID: ${order.id}`,
-      `Total: ${formatCurrencyIdr(order.total)}`,
-      `Provider: ${order.payment.provider}`,
-      `Invoice QRIS: ${order.payment.invoiceUrl}`,
-      `QR String: ${order.payment.qrString}`,
-      `Batas Bayar (WIB): ${formatTimestampWib(order.payment.expiresAt, config.displayTimezone)}`,
+      "✅ Pesanan berhasil dibuat",
+      `🧾 Order ID: ${order.id}`,
+      `💵 Total: ${formatCurrencyIdr(order.total)}`,
+      `🏦 Provider: ${order.payment.provider}`,
+      `🔗 Invoice QRIS: ${order.payment.invoiceUrl}`,
+      `🔳 QR String: ${order.payment.qrString}`,
+      `⏰ Batas Bayar (WIB): ${formatTimestampWib(order.payment.expiresAt, config.displayTimezone)}`,
       "",
       "Setelah transfer, tunggu konfirmasi webhook.",
       "Untuk simulasi, gunakan: /paid <order_id>"
     ].join("\n"),
     Markup.inlineKeyboard([
-      [Markup.button.url("Buka Invoice QRIS", order.payment.invoiceUrl)],
-      [Markup.button.callback("Cek Status Order Ini", `menu_order_status:${order.id}`)],
-      [Markup.button.callback("Kembali ke Menu", "menu_back")]
+      [Markup.button.url("🔗 Buka Invoice QRIS", order.payment.invoiceUrl)],
+      [Markup.button.callback("📦 Cek Status Order Ini", `menu_order_status:${order.id}`)],
+      [Markup.button.callback("🔙 Kembali ke Menu", "menu_back")]
     ])
   );
 }
@@ -577,11 +577,11 @@ function registerUserHandlers(bot) {
     const stock = getStockSummary();
     await ctx.reply(
       [
-        "Info Produk",
-        `Produk: ${config.productName}`,
-        `Harga per akun: ${formatCurrencyIdr(config.productPriceIdr)}`,
-        `Stok ready: ${stock.readyCount}`,
-        `Awaiting benefits: ${stock.awaitingCount}`,
+        "🛍️ Info Produk",
+        `🧩 Produk: ${config.productName}`,
+        `💵 Harga per akun: ${formatCurrencyIdr(config.productPriceIdr)}`,
+        `✅ Stok ready: ${stock.readyCount}`,
+        `🕒 Awaiting benefits: ${stock.awaitingCount}`,
         "",
         "Contoh checkout: /checkout 2"
       ].join("\n")
@@ -771,14 +771,14 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Selamat datang di ${config.storeName}.`,
-        `Produk: ${config.productName}`,
-        `Harga: ${formatCurrencyIdr(config.productPriceIdr)}`,
+        `👋 Selamat datang di ${config.storeName}.`,
+        `🧩 Produk: ${config.productName}`,
+        `💵 Harga: ${formatCurrencyIdr(config.productPriceIdr)}`,
         formatStockSummary(stock),
         "",
         isAdmin
-          ? "Status: Anda terdeteksi sebagai ADMIN."
-          : "Status: Anda terdeteksi sebagai CUSTOMER."
+          ? "🛠️ Status: Anda terdeteksi sebagai ADMIN."
+          : "🙋 Status: Anda terdeteksi sebagai CUSTOMER."
       ].join("\n"),
       mainMenuKeyboard(isAdmin)
     );
@@ -790,12 +790,12 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Produk: ${config.productName}`,
-        `Harga: ${formatCurrencyIdr(config.productPriceIdr)}`,
-        `Stok ready: ${stock.readyCount}`,
-        `Awaiting benefits: ${stock.awaitingCount}`
+        `🧩 Produk: ${config.productName}`,
+        `💵 Harga: ${formatCurrencyIdr(config.productPriceIdr)}`,
+        `✅ Stok ready: ${stock.readyCount}`,
+        `🕒 Awaiting benefits: ${stock.awaitingCount}`
       ].join("\n"),
-      Markup.inlineKeyboard([[Markup.button.callback("Kembali", "menu_back")]])
+      Markup.inlineKeyboard([[Markup.button.callback("🔙 Kembali", "menu_back")]])
     );
   });
 
@@ -806,11 +806,11 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Checkout Pesanan",
-        `Produk: ${config.productName}`,
-        `Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
+        "🧾 Checkout Pesanan",
+        `🧩 Produk: ${config.productName}`,
+        `💵 Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
         `Qty: ${getQty(ctx.from.id)}`,
-        `Total: ${formatCurrencyIdr(getQty(ctx.from.id) * config.productPriceIdr)}`
+        `💰 Total: ${formatCurrencyIdr(getQty(ctx.from.id) * config.productPriceIdr)}`
       ].join("\n"),
       checkoutKeyboard(ctx.from.id)
     );
@@ -824,12 +824,12 @@ function registerUserHandlers(bot) {
       await replyOrEdit(
         ctx,
         [
-          "Belum ada riwayat order di sesi ini.",
+          "📭 Belum ada riwayat order di sesi ini.",
           "Silakan buat order baru atau cek manual dengan /status <order_id>."
         ].join("\n"),
         Markup.inlineKeyboard([
-          [Markup.button.callback("Checkout Sekarang", "menu_checkout")],
-          [Markup.button.callback("Kembali", "menu_back")]
+          [Markup.button.callback("🧾 Checkout Sekarang", "menu_checkout")],
+          [Markup.button.callback("🔙 Kembali", "menu_back")]
         ])
       );
       return;
@@ -841,12 +841,12 @@ function registerUserHandlers(bot) {
       await replyOrEdit(
         ctx,
         [
-          "Order terakhir tidak ditemukan.",
+          "⚠️ Order terakhir tidak ditemukan.",
           "Silakan cek manual dengan /status <order_id> atau buat order baru."
         ].join("\n"),
         Markup.inlineKeyboard([
-          [Markup.button.callback("Checkout Sekarang", "menu_checkout")],
-          [Markup.button.callback("Kembali", "menu_back")]
+          [Markup.button.callback("🧾 Checkout Sekarang", "menu_checkout")],
+          [Markup.button.callback("🔙 Kembali", "menu_back")]
         ])
       );
       return;
@@ -856,8 +856,8 @@ function registerUserHandlers(bot) {
       ctx,
       renderOrderStatusText(order),
       Markup.inlineKeyboard([
-        [Markup.button.callback("Refresh Status", `menu_order_status:${order.id}`)],
-        [Markup.button.callback("Kembali", "menu_back")]
+        [Markup.button.callback("🔄 Refresh Status", `menu_order_status:${order.id}`)],
+        [Markup.button.callback("🔙 Kembali", "menu_back")]
       ])
     );
   });
@@ -872,7 +872,7 @@ function registerUserHandlers(bot) {
         ctx,
         "Order tidak ditemukan atau bukan milik Anda.",
         Markup.inlineKeyboard([
-          [Markup.button.callback("Kembali", "menu_back")]
+          [Markup.button.callback("🔙 Kembali", "menu_back")]
         ])
       );
       return;
@@ -883,8 +883,8 @@ function registerUserHandlers(bot) {
       ctx,
       renderOrderStatusText(order),
       Markup.inlineKeyboard([
-        [Markup.button.callback("Refresh Status", `menu_order_status:${order.id}`)],
-        [Markup.button.callback("Kembali", "menu_back")]
+        [Markup.button.callback("🔄 Refresh Status", `menu_order_status:${order.id}`)],
+        [Markup.button.callback("🔙 Kembali", "menu_back")]
       ])
     );
   });
@@ -895,11 +895,11 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Checkout Pesanan",
-        `Produk: ${config.productName}`,
-        `Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
+        "🧾 Checkout Pesanan",
+        `🧩 Produk: ${config.productName}`,
+        `💵 Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
         `Qty: ${next}`,
-        `Total: ${formatCurrencyIdr(next * config.productPriceIdr)}`
+        `💰 Total: ${formatCurrencyIdr(next * config.productPriceIdr)}`
       ].join("\n"),
       checkoutKeyboard(ctx.from.id)
     );
@@ -913,12 +913,12 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Checkout Pesanan",
-        `Produk: ${config.productName}`,
-        `Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
+        "🧾 Checkout Pesanan",
+        `🧩 Produk: ${config.productName}`,
+        `💵 Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
         `Qty: ${next}`,
-        `Total: ${formatCurrencyIdr(next * config.productPriceIdr)}`,
-        `Stok ready saat ini: ${getReadyAccounts().length}`
+        `💰 Total: ${formatCurrencyIdr(next * config.productPriceIdr)}`,
+        `✅ Stok ready saat ini: ${getReadyAccounts().length}`
       ].join("\n"),
       checkoutKeyboard(ctx.from.id)
     );
@@ -946,7 +946,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Panel Admin",
+        "🛠️ Panel Admin",
         "Pilih aksi cepat di bawah.",
         "Untuk aksi lanjutan tetap bisa pakai command /admin"
       ].join("\n"),
@@ -980,7 +980,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Dashboard Stok",
+        "📦 Dashboard Stok",
         stockIndicator,
         `Ready: ${stock.readyCount}`,
         `Awaiting benefits: ${stock.awaitingCount}`,
@@ -1004,11 +1004,11 @@ function registerUserHandlers(bot) {
       ctx,
       pending.length === 0
         ? [
-          "Transaksi Pending",
+          "⏳ Transaksi Pending",
           "Tidak ada transaksi yang menunggu pembayaran saat ini."
         ].join("\n")
         : [
-          "Transaksi Pending",
+          "⏳ Transaksi Pending",
           `Total transaksi menunggu pembayaran: ${pending.length}`,
           "",
           "Preview order:",
@@ -1032,7 +1032,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Dashboard Pendapatan",
+        "💰 Dashboard Pendapatan",
         "",
         "Periode aktif (setelah reset):",
         `Order dibayar: ${summary.paidOrderCount}`,
@@ -1058,7 +1058,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Konfirmasi Reset Pendapatan",
+        "⚠️ Konfirmasi Reset Pendapatan",
         "Reset akan mengosongkan laporan periode aktif (mulai dari nol).",
         "Riwayat order tetap aman dan tidak dihapus."
       ].join("\n"),
@@ -1089,7 +1089,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Reset Pendapatan Berhasil",
+        "✅ Reset Pendapatan Berhasil",
         `Waktu Reset (WIB): ${formatTimestampWib(reset.lastResetAt, config.displayTimezone)}`,
         "",
         "Periode aktif saat ini:",
@@ -1109,7 +1109,7 @@ function registerUserHandlers(bot) {
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
-      "Daftar akun admin. Pilih source akun:",
+      "📋 Daftar akun admin. Pilih source akun:",
       accountListSourceKeyboard()
     );
   });
@@ -1134,7 +1134,7 @@ function registerUserHandlers(bot) {
 
     await replyOrEdit(
       ctx,
-      `List akun ${source} (${accounts.length} akun) - halaman ${page}/${totalPages}`,
+      `📄 List akun ${source} (${accounts.length} akun) - halaman ${page}/${totalPages}`,
       accountListKeyboard(source, accounts, page)
     );
   });
@@ -1436,7 +1436,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Ubah Status Akun Masal`,
+        `🧩 Ubah Status Akun Masal`,
         `Source: ${source}`,
         `Dipilih: ${state.selectedIds.size} akun`,
         `Target: ${state.target}`,
@@ -1475,7 +1475,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Ubah Status Akun Masal`,
+        `🧩 Ubah Status Akun Masal`,
         `Source: ${source}`,
         `Dipilih: ${state.selectedIds.size} akun`,
         `Target: ${state.target}`,
@@ -1508,7 +1508,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Ubah Status Akun Masal`,
+        `🧩 Ubah Status Akun Masal`,
         `Source: ${source}`,
         `Dipilih: ${state.selectedIds.size} akun`,
         `Target: ${state.target}`,
@@ -1541,7 +1541,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Ubah Status Akun Masal`,
+        `🧩 Ubah Status Akun Masal`,
         `Source: ${source}`,
         `Dipilih: ${state.selectedIds.size} akun`,
         `Target: ${state.target}`,
@@ -1579,7 +1579,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Ubah Status Akun Masal`,
+        `🧩 Ubah Status Akun Masal`,
         `Source: ${source}`,
         `Dipilih: ${state.selectedIds.size} akun`,
         `Target: ${state.target}`,
@@ -1633,7 +1633,7 @@ function registerUserHandlers(bot) {
   });
 
   bot.action("admin_page_noop", async (ctx) => {
-    await ctx.answerCbQuery("Gunakan Prev/Next untuk pindah halaman");
+    await ctx.answerCbQuery("Gunakan ⬅️ / ➡️ untuk pindah halaman");
   });
 
   bot.action("admin_btn_cari", async (ctx) => {
