@@ -27,6 +27,7 @@ const { notifyOrderCreated, checkAndNotifyReadyStock } = require("../../services
 const { getBroadcastAudience } = require("../../services/customerService");
 
 const userCheckoutQty = new Map();
+const userLastOrderId = new Map();
 const adminInputState = new Map();
 const adminMassState = new Map();
 const adminSearchState = new Map();
@@ -66,7 +67,8 @@ function setQty(userId, qty) {
 function mainMenuKeyboard(isAdmin) {
   const rows = [
     [Markup.button.callback("Lihat Produk", "menu_produk")],
-    [Markup.button.callback("Checkout", "menu_checkout")]
+    [Markup.button.callback("Checkout", "menu_checkout")],
+    [Markup.button.callback("Status Order Terakhir", "menu_last_status")]
   ];
 
   if (isAdmin) {
@@ -238,6 +240,20 @@ function renderAccountDetail(account, source) {
     `Benefit updated (WIB): ${formatTimestampWib(account.benefitUpdatedAt, config.displayTimezone)}`
   );
   return lines.join("\n");
+}
+
+function renderOrderStatusText(order) {
+  return [
+    `Order: ${order.id}`,
+    `Status: ${order.status}`,
+    `Total: ${formatCurrencyIdr(order.total)}`,
+    `Invoice: ${order.payment.invoiceUrl}`,
+    `Expired (WIB): ${formatTimestampWib(order.payment.expiresAt, config.displayTimezone)}`,
+    `Paid At (WIB): ${formatTimestampWib(order.payment.paidAt, config.displayTimezone)}`,
+    `Payment ref: ${order.payment.paidReference || "-"}`,
+    `Delivery attempts: ${order.delivery && Number.isInteger(order.delivery.attempts) ? order.delivery.attempts : 0}`,
+    `Delivery error: ${order.delivery && order.delivery.lastError ? order.delivery.lastError : "-"}`
+  ].join("\n");
 }
 
 function adminInputKeyboard() {
@@ -518,6 +534,8 @@ async function createOrderForUser(bot, ctx, quantity) {
     reservedAccounts: reserved
   });
 
+  userLastOrderId.set(String(ctx.from.id), order.id);
+
   await notifyOrderCreated(bot, order);
 
   await replyOrEdit(
@@ -533,7 +551,12 @@ async function createOrderForUser(bot, ctx, quantity) {
       "",
       "Setelah transfer, tunggu konfirmasi webhook.",
       "Untuk simulasi, gunakan: /paid <order_id>"
-    ].join("\n")
+    ].join("\n"),
+    Markup.inlineKeyboard([
+      [Markup.button.url("Buka Invoice QRIS", order.payment.invoiceUrl)],
+      [Markup.button.callback("Cek Status Order Ini", `menu_order_status:${order.id}`)],
+      [Markup.button.callback("Kembali ke Menu", "menu_back")]
+    ])
   );
 }
 
@@ -595,19 +618,8 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    await ctx.reply(
-      [
-        `Order: ${order.id}`,
-        `Status: ${order.status}`,
-        `Total: ${formatCurrencyIdr(order.total)}`,
-        `Invoice: ${order.payment.invoiceUrl}`,
-        `Expired (WIB): ${formatTimestampWib(order.payment.expiresAt, config.displayTimezone)}`,
-        `Paid At (WIB): ${formatTimestampWib(order.payment.paidAt, config.displayTimezone)}`,
-        `Payment ref: ${order.payment.paidReference || "-"}`,
-        `Delivery attempts: ${order.delivery && Number.isInteger(order.delivery.attempts) ? order.delivery.attempts : 0}`,
-        `Delivery error: ${order.delivery && order.delivery.lastError ? order.delivery.lastError : "-"}`
-      ].join("\n")
-    );
+    userLastOrderId.set(String(ctx.from.id), order.id);
+    await ctx.reply(renderOrderStatusText(order));
   });
 
   bot.command("paid", async (paidCtx) => {
@@ -804,6 +816,79 @@ function registerUserHandlers(bot) {
     );
   });
 
+  bot.action("menu_last_status", async (ctx) => {
+    await ctx.answerCbQuery();
+
+    const lastOrderId = userLastOrderId.get(String(ctx.from.id));
+    if (!lastOrderId) {
+      await replyOrEdit(
+        ctx,
+        [
+          "Belum ada riwayat order di sesi ini.",
+          "Silakan buat order baru atau cek manual dengan /status <order_id>."
+        ].join("\n"),
+        Markup.inlineKeyboard([
+          [Markup.button.callback("Checkout Sekarang", "menu_checkout")],
+          [Markup.button.callback("Kembali", "menu_back")]
+        ])
+      );
+      return;
+    }
+
+    const order = getOrderById(lastOrderId);
+    if (!order || String(order.telegramId) !== String(ctx.from.id)) {
+      userLastOrderId.delete(String(ctx.from.id));
+      await replyOrEdit(
+        ctx,
+        [
+          "Order terakhir tidak ditemukan.",
+          "Silakan cek manual dengan /status <order_id> atau buat order baru."
+        ].join("\n"),
+        Markup.inlineKeyboard([
+          [Markup.button.callback("Checkout Sekarang", "menu_checkout")],
+          [Markup.button.callback("Kembali", "menu_back")]
+        ])
+      );
+      return;
+    }
+
+    await replyOrEdit(
+      ctx,
+      renderOrderStatusText(order),
+      Markup.inlineKeyboard([
+        [Markup.button.callback("Refresh Status", `menu_order_status:${order.id}`)],
+        [Markup.button.callback("Kembali", "menu_back")]
+      ])
+    );
+  });
+
+  bot.action(/^menu_order_status:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const orderId = ctx.match[1];
+    const order = getOrderById(orderId);
+
+    if (!order || String(order.telegramId) !== String(ctx.from.id)) {
+      await replyOrEdit(
+        ctx,
+        "Order tidak ditemukan atau bukan milik Anda.",
+        Markup.inlineKeyboard([
+          [Markup.button.callback("Kembali", "menu_back")]
+        ])
+      );
+      return;
+    }
+
+    userLastOrderId.set(String(ctx.from.id), order.id);
+    await replyOrEdit(
+      ctx,
+      renderOrderStatusText(order),
+      Markup.inlineKeyboard([
+        [Markup.button.callback("Refresh Status", `menu_order_status:${order.id}`)],
+        [Markup.button.callback("Kembali", "menu_back")]
+      ])
+    );
+  });
+
   bot.action("checkout_dec", async (ctx) => {
     await ctx.answerCbQuery();
     const next = setQty(ctx.from.id, getQty(ctx.from.id) - 1);
@@ -890,10 +975,13 @@ function registerUserHandlers(bot) {
 
     await ctx.answerCbQuery();
     const stock = getStockSummary();
+    const isLowStock = Number(stock.readyCount) <= Number(config.lowStockThreshold || 3);
+    const stockIndicator = isLowStock ? "Status Stok: MENIPIS" : "Status Stok: AMAN";
     await replyOrEdit(
       ctx,
       [
         "Dashboard Stok",
+        stockIndicator,
         `Ready: ${stock.readyCount}`,
         `Awaiting benefits: ${stock.awaitingCount}`,
         `Sold: ${stock.soldCount}`,
@@ -911,12 +999,21 @@ function registerUserHandlers(bot) {
 
     await ctx.answerCbQuery();
     const pending = getPendingOrders();
+    const preview = pending.slice(0, 5).map((row) => `- ${row.id} | ${formatCurrencyIdr(row.total)}`);
     await replyOrEdit(
       ctx,
-      [
-        "Transaksi Pending",
-        `Total transaksi menunggu pembayaran: ${pending.length}`
-      ].join("\n"),
+      pending.length === 0
+        ? [
+          "Transaksi Pending",
+          "Tidak ada transaksi yang menunggu pembayaran saat ini."
+        ].join("\n")
+        : [
+          "Transaksi Pending",
+          `Total transaksi menunggu pembayaran: ${pending.length}`,
+          "",
+          "Preview order:",
+          ...preview
+        ].join("\n"),
       adminMenuKeyboard()
     );
   });
