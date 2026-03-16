@@ -6,6 +6,7 @@ const files = [
   "awaiting_benefits.json",
   "terjual.json",
   path.join("data", "orders.json"),
+  path.join("data", "revenue_reset_state.json"),
   path.join("data", "customers.json"),
   path.join("data", "stock_alert_state.json")
 ];
@@ -31,6 +32,8 @@ function run() {
     const full = path.join(process.cwd(), file);
     const fallback = file.endsWith("stock_alert_state.json")
       ? { lastReadyCount: null, lowNotified: false }
+      : file.endsWith("revenue_reset_state.json")
+        ? { lastResetAt: null }
       : [];
     ensureJsonFile(full, fallback);
   }

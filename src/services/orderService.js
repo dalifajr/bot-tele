@@ -68,6 +68,18 @@ function saveOrders(orders) {
   writeJson(paths.orders, orders);
 }
 
+function readRevenueResetState() {
+  return safeReadJson(paths.revenueResetState, {
+    lastResetAt: null
+  });
+}
+
+function saveRevenueResetState(state) {
+  writeJson(paths.revenueResetState, {
+    lastResetAt: state && state.lastResetAt ? String(state.lastResetAt) : null
+  });
+}
+
 function createOrder({ telegramId, quantity, reservedAccounts }) {
   const now = new Date();
   const orderId = `ORD-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${uuidv4().slice(0, 8).toUpperCase()}`;
@@ -277,10 +289,37 @@ function getPendingOrders() {
 
 function getRevenueSummary() {
   const paid = listOrders().filter((item) => item.status === ORDER_STATUS.PAID || item.status === ORDER_STATUS.DELIVERED);
-  const totalRevenue = paid.reduce((sum, row) => sum + Number(row.total || 0), 0);
+  const totalRevenueAllTime = paid.reduce((sum, row) => sum + Number(row.total || 0), 0);
+  const allTimePaidOrderCount = paid.length;
+
+  const resetState = readRevenueResetState();
+  const resetAtMs = resetState.lastResetAt ? Date.parse(resetState.lastResetAt) : NaN;
+
+  const paidSinceReset = Number.isNaN(resetAtMs)
+    ? paid
+    : paid.filter((item) => {
+      const paidAtMs = Date.parse(item?.payment?.paidAt || "");
+      return !Number.isNaN(paidAtMs) && paidAtMs >= resetAtMs;
+    });
+
+  const totalRevenueSinceReset = paidSinceReset.reduce((sum, row) => sum + Number(row.total || 0), 0);
+
   return {
-    totalRevenue,
-    paidOrderCount: paid.length
+    totalRevenue: totalRevenueSinceReset,
+    paidOrderCount: paidSinceReset.length,
+    totalRevenueAllTime,
+    allTimePaidOrderCount,
+    lastResetAt: resetState.lastResetAt || null
+  };
+}
+
+function resetRevenueSummary() {
+  const now = nowIso();
+  saveRevenueResetState({
+    lastResetAt: now
+  });
+  return {
+    lastResetAt: now
   };
 }
 
@@ -332,5 +371,6 @@ module.exports = {
   expireOverdueOrders,
   getPendingOrders,
   getRevenueSummary,
+  resetRevenueSummary,
   getOrderSummaryByStatus
 };

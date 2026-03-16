@@ -9,7 +9,8 @@ const {
 const { checkAndNotifyReadyStock } = require("../../services/adminNotificationService");
 const {
   getPendingOrders,
-  getRevenueSummary
+  getRevenueSummary,
+  resetRevenueSummary
 } = require("../../services/orderService");
 const { formatCurrencyIdr } = require("../../utils/formatters");
 const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitHtmlService");
@@ -41,6 +42,7 @@ function renderAdminMenuHelp() {
     "/admin_stok",
     "/admin_pending",
     "/admin_pendapatan",
+    "/admin_reset_pendapatan",
     "/admin_cari <username>",
     "/admin_tambah <blok akun>",
     "/admin_set_status <username> <awaiting|ready>",
@@ -126,11 +128,35 @@ function registerAdminHandlers(bot) {
     }
 
     const summary = getRevenueSummary();
+    const resetInfo = summary.lastResetAt ? `Reset terakhir: ${summary.lastResetAt}` : "Reset terakhir: belum pernah";
     await ctx.reply(
       [
-        "Ringkasan pendapatan:",
+        "Dashboard Pendapatan",
+        "",
+        "Periode aktif (setelah reset):",
         `Order dibayar: ${summary.paidOrderCount}`,
-        `Total pendapatan: ${formatCurrencyIdr(summary.totalRevenue)}`
+        `Total pendapatan: ${formatCurrencyIdr(summary.totalRevenue)}`,
+        "",
+        "Semua waktu:",
+        `Order dibayar: ${summary.allTimePaidOrderCount}`,
+        `Total pendapatan: ${formatCurrencyIdr(summary.totalRevenueAllTime)}`,
+        "",
+        resetInfo
+      ].join("\n")
+    );
+  });
+
+  bot.command("admin_reset_pendapatan", async (ctx) => {
+    if (!(await ensureAdmin(ctx))) {
+      return;
+    }
+
+    const reset = resetRevenueSummary();
+    await ctx.reply(
+      [
+        "Reset pendapatan berhasil.",
+        `Waktu reset: ${reset.lastResetAt}`,
+        "Gunakan /admin_pendapatan untuk melihat laporan periode aktif terbaru."
       ].join("\n")
     );
   });

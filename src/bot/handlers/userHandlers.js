@@ -18,7 +18,8 @@ const {
   getOrderById,
   markOrderPaid,
   getPendingOrders,
-  getRevenueSummary
+  getRevenueSummary,
+  resetRevenueSummary
 } = require("../../services/orderService");
 const { formatCurrencyIdr, formatStockSummary } = require("../../utils/formatters");
 const { deliverOrderAccounts } = require("../../services/deliveryService");
@@ -37,12 +38,14 @@ function isAdminUser(ctx) {
 
 function renderHelp() {
   return [
-    "Perintah user:",
-    "/start - menu awal",
-    "/produk - lihat produk dan stok",
-    "/checkout <qty> - buat order",
-    "/status <order_id> - cek status order",
-    "/myid - cek telegram id"
+    "Panduan Cepat BOT TELE",
+    "",
+    "Perintah utama:",
+    "/start - buka menu utama",
+    "/produk - lihat produk, harga, dan stok",
+    "/checkout <qty> - buat pesanan baru",
+    "/status <order_id> - cek status pesanan",
+    "/myid - cek Telegram ID"
   ].join("\n");
 }
 
@@ -97,6 +100,23 @@ function adminMenuKeyboard() {
     [Markup.button.callback("Tambah Akun", "admin_btn_tambah")],
     [Markup.button.callback("Broadcast", "admin_btn_broadcast")],
     [Markup.button.callback("Kembali", "menu_back")]
+  ]);
+}
+
+function adminRevenueKeyboard() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback("Reset Pendapatan", "admin_rev_reset_prompt")],
+    [Markup.button.callback("Kembali", "menu_admin")]
+  ]);
+}
+
+function adminRevenueResetConfirmKeyboard() {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback("Ya, Reset", "admin_rev_reset_confirm"),
+      Markup.button.callback("Batal", "admin_rev_reset_cancel")
+    ],
+    [Markup.button.callback("Kembali", "menu_admin")]
   ]);
 }
 
@@ -446,14 +466,15 @@ async function sendMainMenu(ctx) {
   await ctx.reply(
     [
       `Selamat datang di ${config.storeName}.`,
+      "",
       `Produk: ${config.productName}`,
-      `Harga: ${formatCurrencyIdr(config.productPriceIdr)}`,
+      `Harga per akun: ${formatCurrencyIdr(config.productPriceIdr)}`,
       formatStockSummary(stock),
       "",
       isAdmin
-        ? "Status: Anda terdeteksi sebagai ADMIN."
-        : "Status: Anda terdeteksi sebagai CUSTOMER.",
-      "Gunakan tombol di bawah untuk navigasi."
+        ? "Akses: ADMIN"
+        : "Akses: CUSTOMER",
+      "Pilih menu di bawah untuk lanjut."
     ].join("\n"),
     mainMenuKeyboard(isAdmin)
   );
@@ -498,14 +519,16 @@ async function createOrderForUser(bot, ctx, quantity) {
   await replyOrEdit(
     ctx,
     [
-      `Order dibuat: ${order.id}`,
+      "Pesanan berhasil dibuat",
+      `Order ID: ${order.id}`,
       `Total: ${formatCurrencyIdr(order.total)}`,
       `Provider: ${order.payment.provider}`,
       `Invoice QRIS: ${order.payment.invoiceUrl}`,
       `QR String: ${order.payment.qrString}`,
-      `Expired: ${order.payment.expiresAt}`,
+      `Batas bayar: ${order.payment.expiresAt}`,
       "",
-      "Setelah transfer, tunggu konfirmasi webhook atau gunakan /paid <order_id> untuk simulasi pembayaran."
+      "Setelah transfer, tunggu konfirmasi webhook.",
+      "Untuk simulasi, gunakan: /paid <order_id>"
     ].join("\n")
   );
 }
@@ -527,12 +550,13 @@ function registerUserHandlers(bot) {
     const stock = getStockSummary();
     await ctx.reply(
       [
+        "Info Produk",
         `Produk: ${config.productName}`,
-        `Harga: ${formatCurrencyIdr(config.productPriceIdr)}`,
+        `Harga per akun: ${formatCurrencyIdr(config.productPriceIdr)}`,
         `Stok ready: ${stock.readyCount}`,
         `Awaiting benefits: ${stock.awaitingCount}`,
         "",
-        "Checkout contoh: /checkout 2"
+        "Contoh checkout: /checkout 2"
       ].join("\n")
     );
   });
@@ -766,7 +790,8 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Checkout ${config.productName}`,
+        "Checkout Pesanan",
+        `Produk: ${config.productName}`,
         `Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
         `Qty: ${getQty(ctx.from.id)}`,
         `Total: ${formatCurrencyIdr(getQty(ctx.from.id) * config.productPriceIdr)}`
@@ -781,7 +806,8 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Checkout ${config.productName}`,
+        "Checkout Pesanan",
+        `Produk: ${config.productName}`,
         `Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
         `Qty: ${next}`,
         `Total: ${formatCurrencyIdr(next * config.productPriceIdr)}`
@@ -798,7 +824,8 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        `Checkout ${config.productName}`,
+        "Checkout Pesanan",
+        `Produk: ${config.productName}`,
         `Harga satuan: ${formatCurrencyIdr(config.productPriceIdr)}`,
         `Qty: ${next}`,
         `Total: ${formatCurrencyIdr(next * config.productPriceIdr)}`,
@@ -862,7 +889,7 @@ function registerUserHandlers(bot) {
     await replyOrEdit(
       ctx,
       [
-        "Panel stok:",
+        "Dashboard Stok",
         `Ready: ${stock.readyCount}`,
         `Awaiting benefits: ${stock.awaitingCount}`,
         `Sold: ${stock.soldCount}`,
@@ -882,7 +909,10 @@ function registerUserHandlers(bot) {
     const pending = getPendingOrders();
     await replyOrEdit(
       ctx,
-      `Total pending transaksi: ${pending.length}`,
+      [
+        "Transaksi Pending",
+        `Total transaksi menunggu pembayaran: ${pending.length}`
+      ].join("\n"),
       adminMenuKeyboard()
     );
   });
@@ -895,14 +925,75 @@ function registerUserHandlers(bot) {
 
     await ctx.answerCbQuery();
     const summary = getRevenueSummary();
+    const resetInfo = summary.lastResetAt ? `Reset terakhir: ${summary.lastResetAt}` : "Reset terakhir: belum pernah";
     await replyOrEdit(
       ctx,
       [
-        "Ringkasan pendapatan:",
+        "Dashboard Pendapatan",
+        "",
+        "Periode aktif (setelah reset):",
+        `Order dibayar: ${summary.paidOrderCount}`,
+        `Total pendapatan: ${formatCurrencyIdr(summary.totalRevenue)}`,
+        "",
+        "Semua waktu:",
+        `Order dibayar: ${summary.allTimePaidOrderCount}`,
+        `Total pendapatan: ${formatCurrencyIdr(summary.totalRevenueAllTime)}`,
+        "",
+        resetInfo
+      ].join("\n"),
+      adminRevenueKeyboard()
+    );
+  });
+
+  bot.action("admin_rev_reset_prompt", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      [
+        "Konfirmasi Reset Pendapatan",
+        "Reset akan mengosongkan laporan periode aktif (mulai dari nol).",
+        "Riwayat order tetap aman dan tidak dihapus."
+      ].join("\n"),
+      adminRevenueResetConfirmKeyboard()
+    );
+  });
+
+  bot.action("admin_rev_reset_cancel", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery("Reset dibatalkan");
+    await replyOrEdit(ctx, "Reset pendapatan dibatalkan.", adminRevenueKeyboard());
+  });
+
+  bot.action("admin_rev_reset_confirm", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const reset = resetRevenueSummary();
+    const summary = getRevenueSummary();
+
+    await ctx.answerCbQuery("Pendapatan berhasil direset");
+    await replyOrEdit(
+      ctx,
+      [
+        "Reset Pendapatan Berhasil",
+        `Waktu reset: ${reset.lastResetAt}`,
+        "",
+        "Periode aktif saat ini:",
         `Order dibayar: ${summary.paidOrderCount}`,
         `Total pendapatan: ${formatCurrencyIdr(summary.totalRevenue)}`
       ].join("\n"),
-      adminMenuKeyboard()
+      adminRevenueKeyboard()
     );
   });
 
