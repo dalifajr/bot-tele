@@ -27,6 +27,7 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Notifikasi stok ready menipis dan notifikasi restock/pulih berdasarkan threshold
 - Menu `Broadcast` admin ke semua pelanggan yang pernah interaksi ke bot (non-admin)
 - User dapat melihat riwayat order sendiri dengan pagination + detail order per item
+- Template respons bot sudah distandardisasi untuk error umum (usage, akses admin, order/account tidak ditemukan) agar output konsisten
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`, `/myorders`
 - Flow admin: cek stok, cek pending, cek pendapatan, tambah akun, cari akun, ubah status benefit
 - Webhook pembayaran HMAC untuk menandai order `PAID`

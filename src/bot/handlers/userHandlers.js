@@ -28,6 +28,13 @@ const { deliverOrderAccounts } = require("../../services/deliveryService");
 const { notifyOrderCreated, checkAndNotifyReadyStock } = require("../../services/adminNotificationService");
 const { getBroadcastAudience } = require("../../services/customerService");
 const { setProductPriceIdr } = require("../../services/priceConfigService");
+const {
+  invalidUsageMessage,
+  orderNotFoundMessage,
+  orderNotOwnedMessage,
+  accountNotFoundMessage,
+  invalidPriceMessage
+} = require("../../services/responseService");
 
 const userCheckoutQty = new Map();
 const userLastOrderId = new Map();
@@ -724,18 +731,18 @@ function registerUserHandlers(bot) {
   bot.command("status", async (ctx) => {
     const [_, orderId] = String(ctx.message?.text || "").split(" ");
     if (!orderId) {
-      await ctx.reply("Gunakan: /status <order_id>");
+      await ctx.reply(invalidUsageMessage("/status <order_id>"));
       return;
     }
 
     const order = getOrderById(orderId);
     if (!order) {
-      await ctx.reply("Order tidak ditemukan.");
+      await ctx.reply(orderNotFoundMessage());
       return;
     }
 
     if (String(order.telegramId) !== String(ctx.from.id)) {
-      await ctx.reply("Order ini bukan milik Anda.");
+      await ctx.reply(orderNotOwnedMessage());
       return;
     }
 
@@ -750,18 +757,18 @@ function registerUserHandlers(bot) {
   bot.command("paid", async (paidCtx) => {
     const [_, orderId] = String(paidCtx.message?.text || "").split(" ");
     if (!orderId) {
-      await paidCtx.reply("Gunakan: /paid <order_id>");
+      await paidCtx.reply(invalidUsageMessage("/paid <order_id>"));
       return;
     }
 
     const order = getOrderById(orderId);
     if (!order) {
-      await paidCtx.reply("Order tidak ditemukan.");
+      await paidCtx.reply(orderNotFoundMessage());
       return;
     }
 
     if (String(order.telegramId) !== String(paidCtx.from.id)) {
-      await paidCtx.reply("Order ini bukan milik Anda.");
+      await paidCtx.reply(orderNotOwnedMessage());
       return;
     }
 
@@ -811,7 +818,7 @@ function registerUserHandlers(bot) {
       clearAdminSearchState(ctx.from.id);
 
       if (results.length === 0) {
-        await ctx.reply("Akun tidak ditemukan.", adminMenuKeyboard());
+        await ctx.reply(accountNotFoundMessage(), adminMenuKeyboard());
         return;
       }
 
@@ -890,7 +897,7 @@ function registerUserHandlers(bot) {
       const changed = setProductPriceIdr(rawText);
       if (!changed.ok) {
         await ctx.reply(
-          "Format harga tidak valid. Masukkan angka saja. Contoh: 150000",
+          `${invalidPriceMessage()} Contoh: 150000`,
           adminMenuKeyboard()
         );
         return;

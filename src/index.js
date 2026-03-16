@@ -6,6 +6,7 @@ const { startDailyStatusCheck } = require("./services/schedulerService");
 const { startPaymentWebhookServer } = require("./services/paymentWebhookServer");
 const { touchCustomer } = require("./services/customerService");
 const { checkAndNotifyReadyStock } = require("./services/adminNotificationService");
+const { internalErrorMessage } = require("./services/responseService");
 
 if (!config.botToken) {
   throw new Error("TELEGRAM_BOT_TOKEN belum diisi pada .env");
@@ -28,7 +29,7 @@ registerAdminHandlers(bot);
 bot.catch((error, ctx) => {
   console.error("Bot error:", error);
   if (ctx && typeof ctx.reply === "function") {
-    ctx.reply("Terjadi error internal. Silakan coba lagi.");
+    ctx.reply(internalErrorMessage());
   }
 });
 

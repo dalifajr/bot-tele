@@ -15,6 +15,12 @@ const {
 const { formatCurrencyIdr, formatTimestampWib } = require("../../utils/formatters");
 const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitHtmlService");
 const { setProductPriceIdr } = require("../../services/priceConfigService");
+const {
+  adminOnlyMessage,
+  invalidUsageMessage,
+  accountNotFoundMessage,
+  invalidPriceMessage
+} = require("../../services/responseService");
 
 function isAdmin(ctx) {
   const id = ctx.from?.id;
@@ -26,13 +32,7 @@ async function ensureAdmin(ctx) {
     return true;
   }
 
-  await ctx.reply(
-    [
-      "Menu admin hanya untuk admin terdaftar.",
-      `Telegram ID Anda: ${ctx.from?.id || "unknown"}`,
-      "Pastikan ID tersebut ada di ADMIN_TELEGRAM_IDS lalu restart service bot."
-    ].join("\n")
-  );
+  await ctx.reply(adminOnlyMessage(ctx.from?.id));
 
   return false;
 }
@@ -172,13 +172,13 @@ function registerAdminHandlers(bot) {
 
     const [_, nominal] = String(ctx.message?.text || "").split(" ");
     if (!nominal) {
-      await ctx.reply("Gunakan: /admin_set_harga <nominal>");
+      await ctx.reply(invalidUsageMessage("/admin_set_harga <nominal>"));
       return;
     }
 
     const changed = setProductPriceIdr(nominal);
     if (!changed.ok) {
-      await ctx.reply("Nominal tidak valid. Masukkan angka saja. Contoh: /admin_set_harga 175000");
+      await ctx.reply(`${invalidPriceMessage()} Contoh: /admin_set_harga 175000`);
       return;
     }
 
@@ -202,13 +202,13 @@ function registerAdminHandlers(bot) {
     const [_, ...parts] = String(ctx.message?.text || "").split(" ");
     const keyword = parts.join(" ").trim();
     if (!keyword) {
-      await ctx.reply("Gunakan: /admin_cari <username>");
+      await ctx.reply(invalidUsageMessage("/admin_cari <username>"));
       return;
     }
 
     const results = findByUsername(keyword);
     if (results.length === 0) {
-      await ctx.reply("Akun tidak ditemukan.");
+      await ctx.reply(accountNotFoundMessage());
       return;
     }
 
@@ -246,7 +246,7 @@ function registerAdminHandlers(bot) {
 
     const [_, username, statusText] = String(ctx.message?.text || "").split(" ");
     if (!username || !statusText) {
-      await ctx.reply("Gunakan: /admin_set_status <username> <awaiting|ready>");
+      await ctx.reply(invalidUsageMessage("/admin_set_status <username> <awaiting|ready>"));
       return;
     }
 
@@ -286,7 +286,7 @@ function registerAdminHandlers(bot) {
 
     const [_, username] = String(ctx.message?.text || "").split(" ");
     if (!username) {
-      await ctx.reply("Gunakan: /admin_parse_benefit <username>");
+      await ctx.reply(invalidUsageMessage("/admin_parse_benefit <username>"));
       return;
     }
 
