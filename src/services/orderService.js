@@ -283,6 +283,17 @@ function getOrderById(orderId) {
   return listOrders().find((item) => item.id === orderId) || null;
 }
 
+function getOrdersByTelegramId(telegramId) {
+  const needle = String(telegramId || "").trim();
+  if (!needle) {
+    return [];
+  }
+
+  return listOrders()
+    .filter((item) => String(item.telegramId) === needle)
+    .sort((a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0));
+}
+
 function getPendingOrders() {
   return listOrders().filter((item) => item.status === ORDER_STATUS.PENDING_PAYMENT && !isExpired(item));
 }
@@ -384,6 +395,7 @@ module.exports = {
   listOrders,
   createOrder,
   getOrderById,
+  getOrdersByTelegramId,
   markOrderPaid,
   markOrderPaidFromWebhook,
   markOrderDelivered,

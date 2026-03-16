@@ -26,7 +26,8 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Notifikasi admin saat order selesai dikirim beserta nominal pendapatan order
 - Notifikasi stok ready menipis dan notifikasi restock/pulih berdasarkan threshold
 - Menu `Broadcast` admin ke semua pelanggan yang pernah interaksi ke bot (non-admin)
-- Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`
+- User dapat melihat riwayat order sendiri dengan pagination + detail order per item
+- Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`, `/myorders`
 - Flow admin: cek stok, cek pending, cek pendapatan, tambah akun, cari akun, ubah status benefit
 - Webhook pembayaran HMAC untuk menandai order `PAID`
 - Pengiriman akun otomatis ke pembeli saat status pembayaran valid
@@ -155,6 +156,7 @@ User:
 - `/produk`
 - `/checkout <qty>`
 - `/status <order_id>`
+- `/myorders`
 - `/paid <order_id>` (simulasi konfirmasi pembayaran)
 - `/myid`
 

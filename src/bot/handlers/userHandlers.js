@@ -16,6 +16,7 @@ const {
 const {
   createOrder,
   getOrderById,
+  getOrdersByTelegramId,
   markOrderPaid,
   getPendingOrders,
   cancelOrderById,
@@ -34,6 +35,7 @@ const adminInputState = new Map();
 const adminMassState = new Map();
 const adminSearchState = new Map();
 const ACCOUNT_LIST_PAGE_SIZE = 10;
+const USER_ORDER_PAGE_SIZE = 5;
 
 function isAdminUser(ctx) {
   return config.adminTelegramIds.includes(String(ctx.from?.id));
@@ -48,6 +50,7 @@ function renderHelp() {
     "/produk - lihat produk, harga, dan stok",
     "/checkout <qty> - buat pesanan baru",
     "/status <order_id> - cek status pesanan",
+    "/myorders - lihat riwayat order Anda",
     "/myid - cek Telegram ID"
   ].join("\n");
 }
@@ -70,6 +73,7 @@ function mainMenuKeyboard(isAdmin) {
   const rows = [
     [Markup.button.callback("🛍️ Lihat Produk", "menu_produk")],
     [Markup.button.callback("🧾 Checkout", "menu_checkout")],
+    [Markup.button.callback("📚 Riwayat Order", "menu_my_orders:1")],
     [Markup.button.callback("📦 Status Order Terakhir", "menu_last_status")]
   ];
 
@@ -257,6 +261,82 @@ function renderOrderStatusText(order) {
     `Delivery attempts: ${order.delivery && Number.isInteger(order.delivery.attempts) ? order.delivery.attempts : 0}`,
     `Delivery error: ${order.delivery && order.delivery.lastError ? order.delivery.lastError : "-"}`
   ].join("\n");
+}
+
+function userOrderHistoryKeyboard(orders, page) {
+  const totalPages = Math.max(1, Math.ceil(orders.length / USER_ORDER_PAGE_SIZE));
+  const currentPage = Math.max(1, Math.min(totalPages, Number(page) || 1));
+  const start = (currentPage - 1) * USER_ORDER_PAGE_SIZE;
+  const end = start + USER_ORDER_PAGE_SIZE;
+  const visible = orders.slice(start, end);
+
+  const rows = visible.map((order) => [
+    Markup.button.callback(
+      `${order.status} | ${formatCurrencyIdr(order.total)}`,
+      `menu_my_order_detail:${order.id}:${currentPage}`
+    )
+  ]);
+
+  if (totalPages > 1) {
+    const navRow = [];
+    if (currentPage > 1) {
+      navRow.push(Markup.button.callback("⬅️", `menu_my_orders:${currentPage - 1}`));
+    }
+    navRow.push(Markup.button.callback(`${currentPage}/${totalPages}`, "menu_my_orders_noop"));
+    if (currentPage < totalPages) {
+      navRow.push(Markup.button.callback("➡️", `menu_my_orders:${currentPage + 1}`));
+    }
+    rows.push(navRow);
+  }
+
+  rows.push([Markup.button.callback("🔙 Kembali", "menu_back")]);
+  return Markup.inlineKeyboard(rows);
+}
+
+function renderUserOrderHistoryText(orders, page) {
+  const totalPages = Math.max(1, Math.ceil(orders.length / USER_ORDER_PAGE_SIZE));
+  const currentPage = Math.max(1, Math.min(totalPages, Number(page) || 1));
+  return [
+    "📚 Riwayat Order Anda",
+    `Total order: ${orders.length}`,
+    `Halaman: ${currentPage}/${totalPages}`,
+    "",
+    "Pilih salah satu order untuk lihat detail."
+  ].join("\n");
+}
+
+function userOrderDetailKeyboard(orderId, page) {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback("⬅️ Kembali ke Riwayat", `menu_my_orders:${page || 1}`)],
+    [Markup.button.callback("🔄 Refresh Status", `menu_order_status:${orderId}`)],
+    [Markup.button.callback("🏠 Menu Utama", "menu_back")]
+  ]);
+}
+
+async function showUserOrderHistory(ctx, page) {
+  const userId = String(ctx.from?.id || "");
+  const orders = getOrdersByTelegramId(userId);
+
+  if (orders.length === 0) {
+    await replyOrEdit(
+      ctx,
+      [
+        "📭 Belum ada riwayat order.",
+        "Silakan buat order baru melalui menu checkout."
+      ].join("\n"),
+      Markup.inlineKeyboard([
+        [Markup.button.callback("🧾 Checkout Sekarang", "menu_checkout")],
+        [Markup.button.callback("🔙 Kembali", "menu_back")]
+      ])
+    );
+    return;
+  }
+
+  await replyOrEdit(
+    ctx,
+    renderUserOrderHistoryText(orders, page),
+    userOrderHistoryKeyboard(orders, page)
+  );
 }
 
 function pendingOrdersKeyboard(pendingOrders) {
@@ -663,6 +743,10 @@ function registerUserHandlers(bot) {
     await ctx.reply(renderOrderStatusText(order));
   });
 
+  bot.command("myorders", async (ctx) => {
+    await showUserOrderHistory(ctx, 1);
+  });
+
   bot.command("paid", async (paidCtx) => {
     const [_, orderId] = String(paidCtx.message?.text || "").split(" ");
     if (!orderId) {
@@ -927,6 +1011,38 @@ function registerUserHandlers(bot) {
         [Markup.button.callback("🔙 Kembali", "menu_back")]
       ])
     );
+  });
+
+  bot.action(/^menu_my_orders:(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const requestedPage = Number(ctx.match[1]) || 1;
+    await showUserOrderHistory(ctx, requestedPage);
+  });
+
+  bot.action(/^menu_my_order_detail:(.+):(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const orderId = ctx.match[1];
+    const page = Number(ctx.match[2]) || 1;
+    const order = getOrderById(orderId);
+
+    if (!order || String(order.telegramId) !== String(ctx.from.id)) {
+      await replyOrEdit(
+        ctx,
+        "Order tidak ditemukan atau bukan milik Anda.",
+        Markup.inlineKeyboard([
+          [Markup.button.callback("⬅️ Kembali ke Riwayat", `menu_my_orders:${page}`)],
+          [Markup.button.callback("🏠 Menu Utama", "menu_back")]
+        ])
+      );
+      return;
+    }
+
+    userLastOrderId.set(String(ctx.from.id), order.id);
+    await replyOrEdit(ctx, renderOrderStatusText(order), userOrderDetailKeyboard(order.id, page));
+  });
+
+  bot.action("menu_my_orders_noop", async (ctx) => {
+    await ctx.answerCbQuery("Halaman riwayat order");
   });
 
   bot.action(/^menu_order_status:(.+)$/, async (ctx) => {
