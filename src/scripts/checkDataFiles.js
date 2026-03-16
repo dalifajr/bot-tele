@@ -6,6 +6,7 @@ const files = [
   "awaiting_benefits.json",
   "terjual.json",
   path.join("data", "orders.json"),
+  path.join("data", "audit_trail.json"),
   path.join("data", "revenue_reset_state.json"),
   path.join("data", "session_state.json"),
   path.join("data", "customers.json"),

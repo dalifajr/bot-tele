@@ -29,8 +29,9 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - User dapat melihat riwayat order sendiri dengan pagination + detail order per item
 - Template respons bot sudah distandardisasi untuk error umum (usage, akses admin, order/account tidak ditemukan) agar output konsisten
 - Session recovery untuk state penting (checkout qty, last order user, admin input, admin mass status) setelah restart bot
+- Audit trail admin untuk aksi mutasi penting (harga, akun, order, pendapatan, mass status)
 - Flow user: `/start`, `/produk`, `/checkout <qty>`, `/status <order_id>`, `/myorders`
-- Flow admin: cek stok, cek pending, cek pendapatan, tambah akun, cari akun, ubah status benefit
+- Flow admin: cek stok, cek pending, cek pendapatan, audit trail, tambah akun, cari akun, ubah status benefit
 - Webhook pembayaran HMAC untuk menandai order `PAID`
 - Pengiriman akun otomatis ke pembeli saat status pembayaran valid
 - Scheduler harian untuk notifikasi ringkasan stok + reminder pengecekan benefit
@@ -169,6 +170,7 @@ Admin:
 - `/admin_pendapatan`
 - `/admin_reset_pendapatan`
 - `/admin_set_harga <nominal>`
+- `/admin_audit`
 - `/admin_cari <username>`
 - `/admin_tambah <blok akun>`
 - `/admin_set_status <username> <awaiting|ready>` (opsional via command)
@@ -267,6 +269,7 @@ sudo journalctl -u bot-tele -f
 - `awaiting_benefits.json`: akun menunggu coupon applied
 - `terjual.json`: akun terjual
 - `data/orders.json`: data order dan status pembayaran
+- `data/audit_trail.json`: log audit aksi admin terbaru (maksimum 500 entri)
 - `data/revenue_reset_state.json`: baseline waktu reset laporan pendapatan
 - `data/session_state.json`: state sesi ringan agar alur penting tetap pulih setelah restart
 - `data/customers.json`: daftar pelanggan yang pernah interaksi (untuk audience broadcast)

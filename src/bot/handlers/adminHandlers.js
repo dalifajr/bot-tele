@@ -16,6 +16,11 @@ const { formatCurrencyIdr, formatTimestampWib } = require("../../utils/formatter
 const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitHtmlService");
 const { setProductPriceIdr } = require("../../services/priceConfigService");
 const {
+  appendAdminAudit,
+  getRecentAdminAudits,
+  formatAdminAuditLine
+} = require("../../services/auditTrailService");
+const {
   adminOnlyMessage,
   invalidUsageMessage,
   accountNotFoundMessage,
@@ -45,6 +50,7 @@ function renderAdminMenuHelp() {
     "/admin_pendapatan",
     "/admin_reset_pendapatan",
     "/admin_set_harga <nominal>",
+    "/admin_audit",
     "/admin_cari <username>",
     "/admin_tambah <blok akun>",
     "/admin_set_status <username> <awaiting|ready>",
@@ -156,6 +162,11 @@ function registerAdminHandlers(bot) {
     }
 
     const reset = resetRevenueSummary();
+    appendAdminAudit({
+      action: "RESET_REVENUE",
+      adminTelegramId: ctx.from?.id,
+      detail: { lastResetAt: reset.lastResetAt }
+    });
     await ctx.reply(
       [
         "Reset pendapatan berhasil.",
@@ -181,6 +192,16 @@ function registerAdminHandlers(bot) {
       await ctx.reply(`${invalidPriceMessage()} Contoh: /admin_set_harga 175000`);
       return;
     }
+
+    appendAdminAudit({
+      action: "SET_PRODUCT_PRICE",
+      adminTelegramId: ctx.from?.id,
+      detail: {
+        previousPrice: changed.previousPrice,
+        nextPrice: changed.nextPrice,
+        persisted: changed.persisted
+      }
+    });
 
     await ctx.reply(
       [
@@ -235,6 +256,11 @@ function registerAdminHandlers(bot) {
     }
 
     const saved = addReadyAccount(parsed);
+    appendAdminAudit({
+      action: "ADD_ACCOUNT",
+      adminTelegramId: ctx.from?.id,
+      detail: { username: saved.username, accountId: saved.id }
+    });
     await checkAndNotifyReadyStock(bot, { reason: "ADMIN_RESTOCK" });
     await ctx.reply(`Akun ${saved.username} berhasil ditambahkan ke ready stock.`);
   });
@@ -266,6 +292,17 @@ function registerAdminHandlers(bot) {
       await ctx.reply("Akun tidak ditemukan atau status tidak valid.");
       return;
     }
+
+    appendAdminAudit({
+      action: "SET_ACCOUNT_STATUS",
+      adminTelegramId: ctx.from?.id,
+      detail: {
+        username: updated.account.username,
+        previousSource: updated.previousSource,
+        nextSource: updated.nextSource,
+        benefitStatus: updated.account.benefitStatus
+      }
+    });
 
     await checkAndNotifyReadyStock(bot, { reason: "ADMIN_SET_STATUS" });
 
@@ -302,6 +339,16 @@ function registerAdminHandlers(bot) {
       return;
     }
 
+    appendAdminAudit({
+      action: "PARSE_BENEFIT_FROM_SNAPSHOT",
+      adminTelegramId: ctx.from?.id,
+      detail: {
+        username: updated.account.username,
+        parsedStatus,
+        source: "benefit.html"
+      }
+    });
+
     await ctx.reply(
       [
         `Snapshot benefit berhasil diproses untuk ${updated.account.username}.`,
@@ -309,6 +356,21 @@ function registerAdminHandlers(bot) {
         `Source data: benefit.html`
       ].join("\n")
     );
+  });
+
+  bot.command("admin_audit", async (ctx) => {
+    if (!(await ensureAdmin(ctx))) {
+      return;
+    }
+
+    const rows = getRecentAdminAudits(10);
+    if (rows.length === 0) {
+      await ctx.reply("Belum ada audit trail admin.");
+      return;
+    }
+
+    const lines = rows.map((item, index) => `${index + 1}. ${formatAdminAuditLine(item, config.displayTimezone)}`);
+    await ctx.reply(["Audit Trail Admin (10 terbaru)", "", ...lines].join("\n"));
   });
 }
 

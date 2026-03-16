@@ -30,6 +30,11 @@ const { getBroadcastAudience } = require("../../services/customerService");
 const { setProductPriceIdr } = require("../../services/priceConfigService");
 const { loadSessionState, saveSessionState } = require("../../services/sessionStateService");
 const {
+  appendAdminAudit,
+  getRecentAdminAudits,
+  formatAdminAuditLine
+} = require("../../services/auditTrailService");
+const {
   invalidUsageMessage,
   orderNotFoundMessage,
   orderNotOwnedMessage,
@@ -178,6 +183,7 @@ function adminMenuKeyboard() {
     [Markup.button.callback("📦 Cek Stok", "admin_btn_stok")],
     [Markup.button.callback("⏳ Cek Pending", "admin_btn_pending")],
     [Markup.button.callback("💰 Cek Pendapatan", "admin_btn_pendapatan")],
+    [Markup.button.callback("🧾 Audit Trail", "admin_btn_audit")],
     [Markup.button.callback("💵 Ubah Harga", "admin_btn_set_price")],
     [Markup.button.callback("📋 Daftar Akun", "admin_btn_list_accounts")],
     [Markup.button.callback("🧩 Ubah Status Akun Masal", "admin_btn_mass_status")],
@@ -682,6 +688,14 @@ function parseSingleAccountText(rawText) {
   };
 }
 
+function logAdminAudit(ctx, action, detail) {
+  appendAdminAudit({
+    action,
+    adminTelegramId: ctx.from?.id,
+    detail
+  });
+}
+
 async function sendMainMenu(ctx) {
   const stock = getStockSummary();
   const isAdmin = isAdminUser(ctx);
@@ -924,6 +938,11 @@ function registerUserHandlers(bot) {
       }
 
       const saved = addReadyAccount(parsed);
+      logAdminAudit(ctx, "ADD_ACCOUNT", {
+        accountId: saved.id,
+        username: saved.username,
+        source: "ready"
+      });
       await checkAndNotifyReadyStock(bot, { reason: "ADMIN_RESTOCK" });
       await ctx.reply(`Akun ${saved.username} berhasil ditambahkan ke ready stock.`, adminMenuKeyboard());
       return;
@@ -963,6 +982,13 @@ function registerUserHandlers(bot) {
         ].join("\n"),
         adminMenuKeyboard()
       );
+
+      logAdminAudit(ctx, "BROADCAST", {
+        audience: audience.length,
+        sent,
+        failed,
+        messageLength: rawText.length
+      });
       return;
     }
 
@@ -989,6 +1015,12 @@ function registerUserHandlers(bot) {
         ].join("\n"),
         adminMenuKeyboard()
       );
+
+      logAdminAudit(ctx, "SET_PRODUCT_PRICE", {
+        previousPrice: changed.previousPrice,
+        nextPrice: changed.nextPrice,
+        persisted: changed.persisted
+      });
       return;
     }
 
@@ -1364,6 +1396,11 @@ function registerUserHandlers(bot) {
     }
 
     await ctx.answerCbQuery("Pesanan dibatalkan");
+    logAdminAudit(ctx, "CANCEL_ORDER", {
+      orderId: cancelled.order.id,
+      previousStatus: "PENDING_PAYMENT",
+      nextStatus: "CANCELLED"
+    });
 
     const pending = getPendingOrders();
     const preview = pending.slice(0, 5).map((row) => `- ${row.id} | ${formatCurrencyIdr(row.total)}`);
@@ -1411,6 +1448,27 @@ function registerUserHandlers(bot) {
     );
   });
 
+  bot.action("admin_btn_audit", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    const rows = getRecentAdminAudits(10);
+    if (rows.length === 0) {
+      await replyOrEdit(ctx, "Belum ada audit trail admin.", adminMenuKeyboard());
+      return;
+    }
+
+    const lines = rows.map((item, index) => `${index + 1}. ${formatAdminAuditLine(item, config.displayTimezone)}`);
+    await replyOrEdit(
+      ctx,
+      ["🧾 Audit Trail Admin (10 terbaru)", "", ...lines].join("\n"),
+      adminMenuKeyboard()
+    );
+  });
+
   bot.action("admin_rev_reset_prompt", async (ctx) => {
     if (!isAdminUser(ctx)) {
       await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
@@ -1447,6 +1505,11 @@ function registerUserHandlers(bot) {
 
     const reset = resetRevenueSummary();
     const summary = getRevenueSummary();
+    logAdminAudit(ctx, "RESET_REVENUE", {
+      lastResetAt: reset.lastResetAt,
+      activePaidOrderCount: summary.paidOrderCount,
+      activeRevenue: summary.totalRevenue
+    });
 
     await ctx.answerCbQuery("Pendapatan berhasil direset");
     await replyOrEdit(
@@ -1590,6 +1653,13 @@ function registerUserHandlers(bot) {
     }
 
     await checkAndNotifyReadyStock(bot, { reason: "ADMIN_SET_STATUS" });
+    logAdminAudit(ctx, "SET_ACCOUNT_STATUS", {
+      accountId,
+      username: updated.account.username,
+      previousSource: updated.previousSource,
+      nextSource: updated.nextSource,
+      benefitStatus: updated.account.benefitStatus
+    });
 
     await replyOrEdit(
       ctx,
@@ -1625,6 +1695,10 @@ function registerUserHandlers(bot) {
     }
 
     if (moved.alreadySold) {
+      logAdminAudit(ctx, "MARK_ACCOUNT_SOLD_NOOP", {
+        accountId,
+        username: moved.account.username
+      });
       await replyOrEdit(
         ctx,
         `Akun ${moved.account.username} sudah berada pada status terjual.`,
@@ -1634,6 +1708,12 @@ function registerUserHandlers(bot) {
     }
 
     await checkAndNotifyReadyStock(bot, { reason: "ADMIN_MARK_SOLD" });
+    logAdminAudit(ctx, "MARK_ACCOUNT_SOLD", {
+      accountId,
+      username: moved.account.username,
+      previousSource: moved.previousSource,
+      nextSource: "sold"
+    });
 
     await replyOrEdit(
       ctx,
@@ -1664,6 +1744,11 @@ function registerUserHandlers(bot) {
     }
 
     await checkAndNotifyReadyStock(bot, { reason: "ADMIN_DELETE_ACCOUNT" });
+    logAdminAudit(ctx, "DELETE_ACCOUNT", {
+      accountId,
+      username: removed.account.username,
+      source: removed.source
+    });
 
     await replyOrEdit(
       ctx,
@@ -1746,6 +1831,11 @@ function registerUserHandlers(bot) {
     }
 
     await checkAndNotifyReadyStock(bot, { reason: "ADMIN_DELETE_ACCOUNT" });
+    logAdminAudit(ctx, "DELETE_ACCOUNT", {
+      accountId,
+      username: removed.account.username,
+      source: removed.source
+    });
 
     await replyOrEdit(
       ctx,
@@ -1975,6 +2065,13 @@ function registerUserHandlers(bot) {
     await ctx.answerCbQuery();
     clearAdminMassState(ctx.from.id);
     await checkAndNotifyReadyStock(bot, { reason: "ADMIN_MASS_STATUS" });
+    logAdminAudit(ctx, "MASS_STATUS_UPDATE", {
+      source,
+      target: result.target,
+      total: result.total,
+      success: result.success,
+      failed: result.failed
+    });
 
     const summary = getStockSummary();
     await replyOrEdit(
