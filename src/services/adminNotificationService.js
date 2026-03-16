@@ -6,8 +6,11 @@ const { formatCurrencyIdr } = require("../utils/formatters");
 
 async function notifyAdmins(bot, lines) {
   const text = Array.isArray(lines) ? lines.join("\n") : String(lines || "");
+  const recipients = bot && bot.channel === "whatsapp"
+    ? config.adminWhatsappNumbers
+    : config.adminTelegramIds;
 
-  for (const adminId of config.adminTelegramIds) {
+  for (const adminId of recipients) {
     try {
       await bot.telegram.sendMessage(adminId, text);
     } catch (error) {

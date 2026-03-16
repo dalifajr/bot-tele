@@ -107,6 +107,8 @@ Template ada di `.env.example`:
 ```env
 TELEGRAM_BOT_TOKEN=
 ADMIN_TELEGRAM_IDS=123456789
+WHATSAPP_ENABLED=false
+ADMIN_WHATSAPP_NUMBERS=628123456789
 STORE_NAME=dzulfikrialifajri store
 PRODUCT_NAME=GitHub Students Dev Pack
 PRODUCT_PRICE_IDR=150000
@@ -122,6 +124,8 @@ LOW_STOCK_THRESHOLD=3
 
 Catatan:
 - `ADMIN_TELEGRAM_IDS` bisa lebih dari satu, pisahkan dengan koma.
+- `ADMIN_WHATSAPP_NUMBERS` bisa lebih dari satu, pisahkan dengan koma (format angka tanpa simbol, contoh `628123456789`).
+- `WHATSAPP_ENABLED=true` untuk menjalankan bot WhatsApp.
 - `PAYMENT_WEBHOOK_SECRET` wajib diganti di production.
 - `LOW_STOCK_THRESHOLD` menentukan batas stok ready yang dianggap menipis.
 - `DISPLAY_TIMEZONE` mengatur zona waktu tampilan pesan bot (default WIB / Asia/Jakarta).
@@ -145,6 +149,24 @@ Untuk pengembangan:
 ```bash
 npm run dev
 ```
+
+Untuk menjalankan versi WhatsApp:
+
+```bash
+npm run start:wa
+```
+
+Untuk development mode WhatsApp:
+
+```bash
+npm run dev:wa
+```
+
+Catatan WhatsApp:
+- Bot menggunakan `whatsapp-web.js` dengan login QR (scan QR di terminal saat pertama kali).
+- Session login WhatsApp disimpan lokal via `LocalAuth`.
+- Version WhatsApp saat ini fokus command text (tanpa inline button seperti Telegram).
+- Command admin WhatsApp yang tersedia: `/admin`, `/admin_stok`, `/admin_pending`, `/admin_pendapatan`, `/admin_reset_pendapatan`, `/admin_cari`, `/admin_tambah`, `/admin_set_status`, `/admin_broadcast`.
 
 ## Daftar command
 

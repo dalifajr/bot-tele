@@ -14,9 +14,22 @@ function parseAdminIds(raw) {
     .filter((v) => /^\d+$/.test(v));
 }
 
+function parsePhoneNumbers(raw) {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((v) => v.replace(/\D/g, ""))
+    .filter((v) => v.length >= 8);
+}
+
 const config = {
   botToken: process.env.TELEGRAM_BOT_TOKEN || "",
   adminTelegramIds: parseAdminIds(process.env.ADMIN_TELEGRAM_IDS),
+  adminWhatsappNumbers: parsePhoneNumbers(process.env.ADMIN_WHATSAPP_NUMBERS),
+  whatsappEnabled: String(process.env.WHATSAPP_ENABLED || "false").toLowerCase() === "true",
   storeName: process.env.STORE_NAME || "digital store",
   productName: process.env.PRODUCT_NAME || "GitHub Students Dev Pack",
   productPriceIdr: Number(process.env.PRODUCT_PRICE_IDR || 150000),

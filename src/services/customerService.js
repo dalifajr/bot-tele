@@ -19,7 +19,8 @@ function touchCustomer(from) {
   const customers = listCustomers();
   const idx = customers.findIndex((item) => String(item.telegramId) === telegramId);
   const now = new Date().toISOString();
-  const isAdmin = config.adminTelegramIds.includes(telegramId);
+  const normalizedId = telegramId.replace(/\D/g, "");
+  const isAdmin = config.adminTelegramIds.includes(telegramId) || config.adminWhatsappNumbers.includes(normalizedId);
 
   if (idx === -1) {
     const next = {
