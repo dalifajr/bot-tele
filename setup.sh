@@ -205,11 +205,32 @@ backup_data() {
 install_whatsapp_system_dependencies() {
   echo "Install dependency sistem untuk WhatsApp (Chromium/Puppeteer)..."
   sudo apt-get update -y
+
+  sudo apt-get install -y ca-certificates fonts-liberation xdg-utils
+
+  # Ubuntu 24.04+ menggunakan varian t64. Fungsi ini memilih paket pertama yang tersedia.
+  install_first_available_pkg() {
+    for pkg in "$@"; do
+      if apt-cache show "${pkg}" >/dev/null 2>&1; then
+        sudo apt-get install -y "${pkg}"
+        return 0
+      fi
+    done
+
+    echo "Peringatan: tidak menemukan kandidat paket dari daftar: $*"
+    return 1
+  }
+
+  install_first_available_pkg libasound2t64 libasound2 || true
+  install_first_available_pkg libatk-bridge2.0-0t64 libatk-bridge2.0-0 || true
+  install_first_available_pkg libatk1.0-0t64 libatk1.0-0 || true
+  install_first_available_pkg libcups2t64 libcups2 || true
+  install_first_available_pkg libglib2.0-0t64 libglib2.0-0 || true
+  install_first_available_pkg libgtk-3-0t64 libgtk-3-0 || true
+
   sudo apt-get install -y \
-    ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 \
-    libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 \
-    libnss3 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 \
-    libxfixes3 libxrandr2 xdg-utils
+    libdbus-1-3 libdrm2 libgbm1 libnspr4 libnss3 libx11-6 libx11-xcb1 \
+    libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2
 
   # Install Chromium sistem jika tersedia.
   if ! command -v chromium-browser >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
