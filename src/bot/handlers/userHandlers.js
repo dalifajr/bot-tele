@@ -555,7 +555,6 @@ async function createOrderForUser(bot, ctx, quantity) {
       "Untuk simulasi, gunakan: /paid <order_id>"
     ].join("\n"),
     Markup.inlineKeyboard([
-      [Markup.button.url("🔗 Buka Invoice QRIS", order.payment.invoiceUrl)],
       [Markup.button.callback("📦 Cek Status Order Ini", `menu_order_status:${order.id}`)],
       [Markup.button.callback("🔙 Kembali ke Menu", "menu_back")]
     ])
