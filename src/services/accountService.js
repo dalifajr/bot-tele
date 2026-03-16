@@ -195,6 +195,79 @@ function findByUsername(username) {
   return results;
 }
 
+function parseSourceFilter(value) {
+  const raw = Array.isArray(value) ? value : String(value || "").split(",");
+  const normalized = raw
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean)
+    .filter((item) => ["ready", "awaiting", "sold"].includes(item));
+
+  if (normalized.length === 0) {
+    return ["ready", "awaiting", "sold"];
+  }
+
+  return Array.from(new Set(normalized));
+}
+
+function parseBenefitStatusFilter(value) {
+  const raw = Array.isArray(value) ? value : String(value || "").split(",");
+  const normalized = raw
+    .map((item) => String(item || "").trim().toUpperCase())
+    .filter(Boolean)
+    .filter((item) => [BENEFIT_STATUS.READY, BENEFIT_STATUS.AWAITING, BENEFIT_STATUS.APPLIED].includes(item));
+
+  if (normalized.length === 0) {
+    return [BENEFIT_STATUS.READY, BENEFIT_STATUS.AWAITING, BENEFIT_STATUS.APPLIED];
+  }
+
+  return Array.from(new Set(normalized));
+}
+
+function findAccountsAdvanced(filters = {}) {
+  const keyword = String(filters.keyword || "").toLowerCase().trim();
+  const sources = parseSourceFilter(filters.sources || filters.source);
+  const benefitStatuses = parseBenefitStatusFilter(filters.benefitStatuses || filters.statuses || filters.status);
+  const days = Number(filters.days);
+  const hasDayLimit = Number.isFinite(days) && days > 0;
+  const cutoff = hasDayLimit ? Date.now() - (days * 24 * 60 * 60 * 1000) : null;
+
+  const bucket = {
+    ready: getReadyAccounts(),
+    awaiting: getAwaitingAccounts(),
+    sold: getSoldAccounts()
+  };
+
+  const results = [];
+  for (const source of sources) {
+    const items = bucket[source] || [];
+    for (const account of items) {
+      if (!benefitStatuses.includes(String(account.benefitStatus || "").toUpperCase())) {
+        continue;
+      }
+
+      if (keyword) {
+        const haystack = [account.username, account.id, account.seller, account.productName]
+          .map((item) => String(item || "").toLowerCase())
+          .join(" ");
+        if (!haystack.includes(keyword)) {
+          continue;
+        }
+      }
+
+      if (cutoff) {
+        const insertedAt = new Date(account.insertedAt || 0).getTime();
+        if (!Number.isFinite(insertedAt) || insertedAt < cutoff) {
+          continue;
+        }
+      }
+
+      results.push({ source, account });
+    }
+  }
+
+  return results;
+}
+
 function getAccountById(accountId) {
   const needle = String(accountId || "").trim();
   if (!needle) {
@@ -435,6 +508,7 @@ module.exports = {
   getAccountById,
   deleteAccountById,
   findByUsername,
+  findAccountsAdvanced,
   upsertBenefitStatusById,
   upsertBenefitStatusByUsername,
   getSoldAccountsNeedAppliedNotification,

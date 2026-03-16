@@ -6,7 +6,7 @@ const {
   getAwaitingAccounts,
   getSoldAccounts,
   addReadyAccount,
-  findByUsername,
+  findAccountsAdvanced,
   getAccountById,
   deleteAccountById,
   moveAccountToSoldById,
@@ -688,6 +688,69 @@ function parseSingleAccountText(rawText) {
   };
 }
 
+function parseAdminSearchQuery(rawText) {
+  const text = String(rawText || "").trim();
+  const tokens = text.split(/\s+/).filter(Boolean);
+
+  const filters = {
+    keyword: "",
+    source: "all",
+    status: "all",
+    days: null
+  };
+
+  let hasKeyValue = false;
+  for (const token of tokens) {
+    const parts = token.split("=");
+    if (parts.length < 2) {
+      continue;
+    }
+
+    hasKeyValue = true;
+    const key = String(parts[0] || "").toLowerCase();
+    const value = parts.slice(1).join("=").trim();
+    if (!value) {
+      continue;
+    }
+
+    if (["q", "keyword", "user"].includes(key)) {
+      filters.keyword = value;
+    } else if (["src", "source"].includes(key)) {
+      filters.source = value;
+    } else if (["status", "benefit"].includes(key)) {
+      filters.status = value;
+    } else if (["days", "day", "hari"].includes(key)) {
+      const days = Number(value);
+      if (Number.isFinite(days) && days > 0) {
+        filters.days = Math.floor(days);
+      }
+    }
+  }
+
+  if (!hasKeyValue) {
+    filters.keyword = text;
+  }
+
+  const normalizedSource = String(filters.source || "all").toLowerCase();
+  const normalizedStatus = String(filters.status || "all").toUpperCase();
+
+  return {
+    queryText: text,
+    serviceFilters: {
+      keyword: filters.keyword,
+      source: normalizedSource === "all" ? "" : normalizedSource,
+      status: normalizedStatus === "ALL" ? "" : normalizedStatus,
+      days: filters.days
+    },
+    summary: {
+      keyword: filters.keyword || "(kosong)",
+      source: normalizedSource,
+      status: normalizedStatus,
+      days: filters.days ? `${filters.days} hari terakhir` : "semua waktu"
+    }
+  };
+}
+
 function logAdminAudit(ctx, action, detail) {
   appendAdminAudit({
     action,
@@ -902,7 +965,8 @@ function registerUserHandlers(bot) {
     }
 
     if (state === "ADMIN_WAIT_SEARCH") {
-      const results = findByUsername(rawText);
+      const parsedSearch = parseAdminSearchQuery(rawText);
+      const results = findAccountsAdvanced(parsedSearch.serviceFilters);
       clearAdminState(ctx.from.id);
       clearAdminSearchState(ctx.from.id);
 
@@ -912,14 +976,18 @@ function registerUserHandlers(bot) {
       }
 
       setAdminSearchState(ctx.from.id, {
-        keyword: rawText,
+        keyword: parsedSearch.queryText,
+        summary: parsedSearch.summary,
         results
       });
 
       const page = 1;
       const totalPages = Math.max(1, Math.ceil(results.length / ACCOUNT_LIST_PAGE_SIZE));
       await ctx.reply(
-        `Ditemukan ${results.length} akun untuk keyword '${rawText}' - halaman ${page}/${totalPages}`,
+        [
+          `Ditemukan ${results.length} akun - halaman ${page}/${totalPages}`,
+          `Filter: keyword=${parsedSearch.summary.keyword}, source=${parsedSearch.summary.source}, status=${parsedSearch.summary.status}, waktu=${parsedSearch.summary.days}`
+        ].join("\n"),
         searchResultKeyboard(results, page)
       );
       return;
@@ -1604,10 +1672,16 @@ function registerUserHandlers(bot) {
 
     const page = clampPage(requestedPage, state.results.length);
     const totalPages = Math.max(1, Math.ceil(state.results.length / ACCOUNT_LIST_PAGE_SIZE));
+    const filterLine = state.summary
+      ? `Filter: keyword=${state.summary.keyword}, source=${state.summary.source}, status=${state.summary.status}, waktu=${state.summary.days}`
+      : `Keyword: ${state.keyword}`;
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
-      `Ditemukan ${state.results.length} akun untuk keyword '${state.keyword}' - halaman ${page}/${totalPages}`,
+      [
+        `Ditemukan ${state.results.length} akun - halaman ${page}/${totalPages}`,
+        filterLine
+      ].join("\n"),
       searchResultKeyboard(state.results, page)
     );
   });
@@ -2106,7 +2180,12 @@ function registerUserHandlers(bot) {
     await ctx.answerCbQuery();
     await replyOrEdit(
       ctx,
-      "Kirim username/keyword akun yang ingin dicari.",
+      [
+        "Kirim query pencarian akun.",
+        "Mode cepat: ketik keyword (contoh: dalifajr)",
+        "Mode filter: q=<keyword> src=<ready|awaiting|sold|all> status=<READY|AWAITING|APPLIED|ALL> days=<angka>",
+        "Contoh: q=dalifajr src=ready status=READY days=14"
+      ].join("\n"),
       adminInputKeyboard()
     );
   });

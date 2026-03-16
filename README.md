@@ -171,7 +171,7 @@ Admin:
 - `/admin_reset_pendapatan`
 - `/admin_set_harga <nominal>`
 - `/admin_audit`
-- `/admin_cari <username>`
+- `/admin_cari <keyword|q=... src=... status=... days=...>`
 - `/admin_tambah <blok akun>`
 - `/admin_set_status <username> <awaiting|ready>` (opsional via command)
 - `/admin_parse_benefit <username>` (opsional via command)
@@ -188,7 +188,9 @@ Alur admin via tombol:
 - Di mode mass status tersedia tombol `Pilih Semua` untuk memilih seluruh akun pada source terpilih
 - Gunakan `Broadcast` untuk kirim pesan massal ke pelanggan yang pernah interaksi
 - Untuk aksi input, gunakan tombol:
-  - `Cari Akun` lalu kirim keyword
+  - `Cari Akun` lalu kirim keyword atau query filter lanjutan
+  - Format filter lanjutan: `q=<keyword> src=<ready|awaiting|sold|all> status=<READY|AWAITING|APPLIED|ALL> days=<angka>`
+  - Contoh: `q=dalifajr src=ready status=READY days=14`
   - `Tambah Akun` lalu kirim blok akun sesuai format
   - `Broadcast` lalu kirim isi pesan
 

@@ -2,7 +2,7 @@ const { config } = require("../../config/env");
 const {
   addReadyAccount,
   getStockSummary,
-  findByUsername,
+  findAccountsAdvanced,
   upsertBenefitStatusByUsername,
   BENEFIT_STATUS
 } = require("../../services/accountService");
@@ -93,6 +93,46 @@ function parseSingleAccountText(rawText) {
     recoveryCodes,
     seller: config.storeName
   };
+}
+
+function parseAdminSearchQuery(rawText) {
+  const text = String(rawText || "").trim();
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const filters = { keyword: "", source: "", status: "", days: null };
+  let hasKeyValue = false;
+
+  for (const token of tokens) {
+    const parts = token.split("=");
+    if (parts.length < 2) {
+      continue;
+    }
+
+    hasKeyValue = true;
+    const key = String(parts[0] || "").toLowerCase();
+    const value = parts.slice(1).join("=").trim();
+    if (!value) {
+      continue;
+    }
+
+    if (["q", "keyword", "user"].includes(key)) {
+      filters.keyword = value;
+    } else if (["src", "source"].includes(key)) {
+      filters.source = value;
+    } else if (["status", "benefit"].includes(key)) {
+      filters.status = value;
+    } else if (["days", "day", "hari"].includes(key)) {
+      const days = Number(value);
+      if (Number.isFinite(days) && days > 0) {
+        filters.days = Math.floor(days);
+      }
+    }
+  }
+
+  if (!hasKeyValue) {
+    filters.keyword = text;
+  }
+
+  return filters;
 }
 
 function registerAdminHandlers(bot) {
@@ -223,11 +263,12 @@ function registerAdminHandlers(bot) {
     const [_, ...parts] = String(ctx.message?.text || "").split(" ");
     const keyword = parts.join(" ").trim();
     if (!keyword) {
-      await ctx.reply(invalidUsageMessage("/admin_cari <username>"));
+      await ctx.reply(invalidUsageMessage("/admin_cari <keyword|q=... src=... status=... days=...>"));
       return;
     }
 
-    const results = findByUsername(keyword);
+    const filters = parseAdminSearchQuery(keyword);
+    const results = findAccountsAdvanced(filters);
     if (results.length === 0) {
       await ctx.reply(accountNotFoundMessage());
       return;
