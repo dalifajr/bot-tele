@@ -21,6 +21,7 @@ Dokumen ini fokus pada instalasi production Ubuntu 20.04+.
 - Daftar akun admin sudah menggunakan pagination (Prev/Next), 10 akun per halaman
 - Menu `Ubah Status Akun Masal` untuk perubahan status banyak akun berdasarkan akun yang dipilih (tidak semua)
 - Menu `Cek Pendapatan` sekarang menyediakan tombol `Reset Pendapatan` (dengan konfirmasi)
+- Menu admin kini memiliki aksi `Ubah Harga` untuk update harga produk langsung dari bot
 - Notifikasi admin otomatis saat order baru dibuat
 - Notifikasi admin saat order selesai dikirim beserta nominal pendapatan order
 - Notifikasi stok ready menipis dan notifikasi restock/pulih berdasarkan threshold
@@ -197,6 +198,7 @@ Admin:
 - `/admin_pending`
 - `/admin_pendapatan`
 - `/admin_reset_pendapatan`
+- `/admin_set_harga <nominal>`
 - `/admin_cari <username>`
 - `/admin_tambah <blok akun>`
 - `/admin_set_status <username> <awaiting|ready>` (opsional via command)
@@ -205,6 +207,7 @@ Admin:
 Alur admin via tombol:
 - Dari `/start` klik `Menu Admin`
 - Pilih aksi cepat: cek stok, cek pending, cek pendapatan
+- Gunakan menu `Ubah Harga` untuk mengganti harga produk (angka saja), perubahan langsung dipakai untuk checkout berikutnya
 - Di menu `Cek Pendapatan`, admin bisa reset laporan periode aktif tanpa menghapus histori order
 - Gunakan `Daftar Akun` untuk melihat list akun awaiting/ready/sold (dengan pagination) lalu klik akun untuk detail + tombol ubah status
 - Pada detail akun tersedia tombol `Set Terjual` untuk memindahkan akun ke `terjual.json`

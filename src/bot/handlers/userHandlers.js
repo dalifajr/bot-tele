@@ -25,6 +25,7 @@ const { formatCurrencyIdr, formatStockSummary, formatTimestampWib } = require(".
 const { deliverOrderAccounts } = require("../../services/deliveryService");
 const { notifyOrderCreated, checkAndNotifyReadyStock } = require("../../services/adminNotificationService");
 const { getBroadcastAudience } = require("../../services/customerService");
+const { setProductPriceIdr } = require("../../services/priceConfigService");
 
 const userCheckoutQty = new Map();
 const userLastOrderId = new Map();
@@ -96,6 +97,7 @@ function adminMenuKeyboard() {
     [Markup.button.callback("📦 Cek Stok", "admin_btn_stok")],
     [Markup.button.callback("⏳ Cek Pending", "admin_btn_pending")],
     [Markup.button.callback("💰 Cek Pendapatan", "admin_btn_pendapatan")],
+    [Markup.button.callback("💵 Ubah Harga", "admin_btn_set_price")],
     [Markup.button.callback("📋 Daftar Akun", "admin_btn_list_accounts")],
     [Markup.button.callback("🧩 Ubah Status Akun Masal", "admin_btn_mass_status")],
     [Markup.button.callback("🔎 Cari Akun", "admin_btn_cari")],
@@ -753,6 +755,32 @@ function registerUserHandlers(bot) {
           `Target audience: ${audience.length}`,
           `Terkirim: ${sent}`,
           `Gagal: ${failed}`
+        ].join("\n"),
+        adminMenuKeyboard()
+      );
+      return;
+    }
+
+    if (state === "ADMIN_WAIT_SET_PRICE") {
+      clearAdminState(ctx.from.id);
+
+      const changed = setProductPriceIdr(rawText);
+      if (!changed.ok) {
+        await ctx.reply(
+          "Format harga tidak valid. Masukkan angka saja. Contoh: 150000",
+          adminMenuKeyboard()
+        );
+        return;
+      }
+
+      await ctx.reply(
+        [
+          "✅ Harga produk berhasil diubah.",
+          `Harga sebelumnya: ${formatCurrencyIdr(changed.previousPrice)}`,
+          `Harga baru: ${formatCurrencyIdr(changed.nextPrice)}`,
+          changed.persisted
+            ? "Perubahan sudah disimpan ke file .env"
+            : "Perubahan aktif di runtime, tapi gagal simpan ke .env"
         ].join("\n"),
         adminMenuKeyboard()
       );
@@ -1669,6 +1697,26 @@ function registerUserHandlers(bot) {
         "Recovery Codes:",
         "code1",
         "code2"
+      ].join("\n"),
+      adminInputKeyboard()
+    );
+  });
+
+  bot.action("admin_btn_set_price", async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    setAdminState(ctx.from.id, "ADMIN_WAIT_SET_PRICE");
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      [
+        "💵 Ubah Harga Produk",
+        `Harga saat ini: ${formatCurrencyIdr(config.productPriceIdr)}`,
+        "Kirim nominal baru (angka saja).",
+        "Contoh: 175000"
       ].join("\n"),
       adminInputKeyboard()
     );

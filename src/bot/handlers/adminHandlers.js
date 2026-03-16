@@ -14,6 +14,7 @@ const {
 } = require("../../services/orderService");
 const { formatCurrencyIdr, formatTimestampWib } = require("../../utils/formatters");
 const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitHtmlService");
+const { setProductPriceIdr } = require("../../services/priceConfigService");
 
 function isAdmin(ctx) {
   const id = ctx.from?.id;
@@ -43,6 +44,7 @@ function renderAdminMenuHelp() {
     "/admin_pending",
     "/admin_pendapatan",
     "/admin_reset_pendapatan",
+    "/admin_set_harga <nominal>",
     "/admin_cari <username>",
     "/admin_tambah <blok akun>",
     "/admin_set_status <username> <awaiting|ready>",
@@ -159,6 +161,35 @@ function registerAdminHandlers(bot) {
         "Reset pendapatan berhasil.",
         `Waktu Reset (WIB): ${formatTimestampWib(reset.lastResetAt, config.displayTimezone)}`,
         "Gunakan /admin_pendapatan untuk melihat laporan periode aktif terbaru."
+      ].join("\n")
+    );
+  });
+
+  bot.command("admin_set_harga", async (ctx) => {
+    if (!(await ensureAdmin(ctx))) {
+      return;
+    }
+
+    const [_, nominal] = String(ctx.message?.text || "").split(" ");
+    if (!nominal) {
+      await ctx.reply("Gunakan: /admin_set_harga <nominal>");
+      return;
+    }
+
+    const changed = setProductPriceIdr(nominal);
+    if (!changed.ok) {
+      await ctx.reply("Nominal tidak valid. Masukkan angka saja. Contoh: /admin_set_harga 175000");
+      return;
+    }
+
+    await ctx.reply(
+      [
+        "Harga produk berhasil diubah.",
+        `Harga sebelumnya: ${formatCurrencyIdr(changed.previousPrice)}`,
+        `Harga baru: ${formatCurrencyIdr(changed.nextPrice)}`,
+        changed.persisted
+          ? "Perubahan sudah disimpan ke file .env"
+          : "Perubahan aktif di runtime, tapi gagal simpan ke .env"
       ].join("\n")
     );
   });
