@@ -21,7 +21,7 @@ const {
   getRevenueSummary,
   resetRevenueSummary
 } = require("../../services/orderService");
-const { formatCurrencyIdr, formatStockSummary } = require("../../utils/formatters");
+const { formatCurrencyIdr, formatStockSummary, formatTimestampWib } = require("../../utils/formatters");
 const { deliverOrderAccounts } = require("../../services/deliveryService");
 const { notifyOrderCreated, checkAndNotifyReadyStock } = require("../../services/adminNotificationService");
 const { getBroadcastAudience } = require("../../services/customerService");
@@ -232,7 +232,11 @@ function renderAccountDetail(account, source) {
     lines.push(code);
   }
 
-  lines.push("", `Inserted: ${account.insertedAt || "-"}`, `Benefit updated: ${account.benefitUpdatedAt || "-"}`);
+  lines.push(
+    "",
+    `Inserted (WIB): ${formatTimestampWib(account.insertedAt, config.displayTimezone)}`,
+    `Benefit updated (WIB): ${formatTimestampWib(account.benefitUpdatedAt, config.displayTimezone)}`
+  );
   return lines.join("\n");
 }
 
@@ -525,7 +529,7 @@ async function createOrderForUser(bot, ctx, quantity) {
       `Provider: ${order.payment.provider}`,
       `Invoice QRIS: ${order.payment.invoiceUrl}`,
       `QR String: ${order.payment.qrString}`,
-      `Batas bayar: ${order.payment.expiresAt}`,
+      `Batas Bayar (WIB): ${formatTimestampWib(order.payment.expiresAt, config.displayTimezone)}`,
       "",
       "Setelah transfer, tunggu konfirmasi webhook.",
       "Untuk simulasi, gunakan: /paid <order_id>"
@@ -597,8 +601,8 @@ function registerUserHandlers(bot) {
         `Status: ${order.status}`,
         `Total: ${formatCurrencyIdr(order.total)}`,
         `Invoice: ${order.payment.invoiceUrl}`,
-        `Expired: ${order.payment.expiresAt}`,
-        `Paid at: ${order.payment.paidAt || "-"}`,
+        `Expired (WIB): ${formatTimestampWib(order.payment.expiresAt, config.displayTimezone)}`,
+        `Paid At (WIB): ${formatTimestampWib(order.payment.paidAt, config.displayTimezone)}`,
         `Payment ref: ${order.payment.paidReference || "-"}`,
         `Delivery attempts: ${order.delivery && Number.isInteger(order.delivery.attempts) ? order.delivery.attempts : 0}`,
         `Delivery error: ${order.delivery && order.delivery.lastError ? order.delivery.lastError : "-"}`
@@ -925,7 +929,9 @@ function registerUserHandlers(bot) {
 
     await ctx.answerCbQuery();
     const summary = getRevenueSummary();
-    const resetInfo = summary.lastResetAt ? `Reset terakhir: ${summary.lastResetAt}` : "Reset terakhir: belum pernah";
+    const resetInfo = summary.lastResetAt
+      ? `Reset Terakhir (WIB): ${formatTimestampWib(summary.lastResetAt, config.displayTimezone)}`
+      : "Reset Terakhir (WIB): belum pernah";
     await replyOrEdit(
       ctx,
       [
@@ -987,7 +993,7 @@ function registerUserHandlers(bot) {
       ctx,
       [
         "Reset Pendapatan Berhasil",
-        `Waktu reset: ${reset.lastResetAt}`,
+        `Waktu Reset (WIB): ${formatTimestampWib(reset.lastResetAt, config.displayTimezone)}`,
         "",
         "Periode aktif saat ini:",
         `Order dibayar: ${summary.paidOrderCount}`,

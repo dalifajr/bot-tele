@@ -12,7 +12,7 @@ const {
   getRevenueSummary,
   resetRevenueSummary
 } = require("../../services/orderService");
-const { formatCurrencyIdr } = require("../../utils/formatters");
+const { formatCurrencyIdr, formatTimestampWib } = require("../../utils/formatters");
 const { detectBenefitStatusFromSnapshotFile } = require("../../services/benefitHtmlService");
 
 function isAdmin(ctx) {
@@ -128,7 +128,9 @@ function registerAdminHandlers(bot) {
     }
 
     const summary = getRevenueSummary();
-    const resetInfo = summary.lastResetAt ? `Reset terakhir: ${summary.lastResetAt}` : "Reset terakhir: belum pernah";
+    const resetInfo = summary.lastResetAt
+      ? `Reset Terakhir (WIB): ${formatTimestampWib(summary.lastResetAt, config.displayTimezone)}`
+      : "Reset Terakhir (WIB): belum pernah";
     await ctx.reply(
       [
         "Dashboard Pendapatan",
@@ -155,7 +157,7 @@ function registerAdminHandlers(bot) {
     await ctx.reply(
       [
         "Reset pendapatan berhasil.",
-        `Waktu reset: ${reset.lastResetAt}`,
+        `Waktu Reset (WIB): ${formatTimestampWib(reset.lastResetAt, config.displayTimezone)}`,
         "Gunakan /admin_pendapatan untuk melihat laporan periode aktif terbaru."
       ].join("\n")
     );

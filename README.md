@@ -114,6 +114,7 @@ DATA_DIR=./data
 INVOICE_EXPIRE_MINUTES=30
 APP_PORT=3000
 PUBLIC_BASE_URL=http://localhost:3000
+DISPLAY_TIMEZONE=Asia/Jakarta
 QRIS_PROVIDER=SIMULATED
 PAYMENT_WEBHOOK_SECRET=change-me
 LOW_STOCK_THRESHOLD=3
@@ -123,7 +124,12 @@ Catatan:
 - `ADMIN_TELEGRAM_IDS` bisa lebih dari satu, pisahkan dengan koma.
 - `PAYMENT_WEBHOOK_SECRET` wajib diganti di production.
 - `LOW_STOCK_THRESHOLD` menentukan batas stok ready yang dianggap menipis.
+- `DISPLAY_TIMEZONE` mengatur zona waktu tampilan pesan bot (default WIB / Asia/Jakarta).
 - Simpan file `.env`, jangan commit ke git.
+
+Catatan timestamp:
+- Data timestamp tetap disimpan dalam UTC ISO pada storage internal.
+- Tampilan waktu pada pesan order, status order, detail akun, dan reset pendapatan ditampilkan dalam WIB.
 
 Catatan perilaku webhook:
 - Callback dengan `paymentReference` yang sama akan dianggap duplikat dan diabaikan.

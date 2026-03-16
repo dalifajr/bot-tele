@@ -24,6 +24,7 @@ const config = {
   invoiceExpireMinutes: Number(process.env.INVOICE_EXPIRE_MINUTES || 30),
   appPort: Number(process.env.APP_PORT || 3000),
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "http://localhost:3000",
+  displayTimezone: process.env.DISPLAY_TIMEZONE || "Asia/Jakarta",
   qrisProvider: process.env.QRIS_PROVIDER || "SIMULATED",
   paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || "dev-secret",
   lowStockThreshold: Number(process.env.LOW_STOCK_THRESHOLD || 3)
