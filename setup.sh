@@ -52,6 +52,9 @@ show_current_config() {
   echo "=== Konfigurasi aktif (.env) ==="
   echo "TELEGRAM_BOT_TOKEN=$(get_env_value TELEGRAM_BOT_TOKEN | sed 's/./*/g')"
   echo "ADMIN_TELEGRAM_IDS=$(get_env_value ADMIN_TELEGRAM_IDS)"
+  echo "WHATSAPP_ENABLED=$(get_env_value WHATSAPP_ENABLED)"
+  echo "ADMIN_WHATSAPP_NUMBERS=$(get_env_value ADMIN_WHATSAPP_NUMBERS)"
+  echo "WHATSAPP_PUPPETEER_EXECUTABLE_PATH=$(get_env_value WHATSAPP_PUPPETEER_EXECUTABLE_PATH)"
   echo "STORE_NAME=$(get_env_value STORE_NAME)"
   echo "PRODUCT_NAME=$(get_env_value PRODUCT_NAME)"
   echo "PRODUCT_PRICE_IDR=$(get_env_value PRODUCT_PRICE_IDR)"
@@ -199,6 +202,53 @@ backup_data() {
   echo "Backup dibuat: ${archive}"
 }
 
+install_whatsapp_system_dependencies() {
+  echo "Install dependency sistem untuk WhatsApp (Chromium/Puppeteer)..."
+  sudo apt-get update -y
+  sudo apt-get install -y \
+    ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 \
+    libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 \
+    libnss3 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 \
+    libxfixes3 libxrandr2 xdg-utils
+
+  # Install Chromium sistem jika tersedia.
+  if ! command -v chromium-browser >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
+    sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium || true
+  fi
+}
+
+setup_whatsapp_bot() {
+  ensure_env_file
+  echo "=== Setup WhatsApp Bot ==="
+
+  install_whatsapp_system_dependencies
+
+  set_env_value "WHATSAPP_ENABLED" "true"
+
+  local wa_admins
+  read -rp "ADMIN_WHATSAPP_NUMBERS (pisahkan koma, contoh 62812...,62813...): " wa_admins
+  if [ -n "${wa_admins}" ]; then
+    set_env_value "ADMIN_WHATSAPP_NUMBERS" "${wa_admins}"
+  fi
+
+  local detected_chrome
+  detected_chrome="$(command -v chromium-browser || command -v chromium || true)"
+  if [ -n "${detected_chrome}" ]; then
+    set_env_value "WHATSAPP_PUPPETEER_EXECUTABLE_PATH" "${detected_chrome}"
+    echo "Chromium terdeteksi: ${detected_chrome}"
+  else
+    echo "Chromium tidak terdeteksi otomatis."
+    echo "Isi manual WHATSAPP_PUPPETEER_EXECUTABLE_PATH di .env jika perlu."
+  fi
+
+  echo "Install/update dependency npm..."
+  npm install
+
+  echo "Setup WhatsApp selesai."
+  echo "Jalankan WhatsApp bot dengan: npm run start:wa"
+  echo "Saat pertama kali run, scan QR yang tampil di terminal."
+}
+
 git_update_project() {
   if [ ! -d "${PROJECT_DIR}/.git" ]; then
     echo "Repository git tidak ditemukan."
@@ -233,6 +283,7 @@ show_menu() {
   echo "13) Health check API"
   echo "14) Backup data + .env"
   echo "15) Update project dari git"
+  echo "16) Setup WhatsApp bot"
   echo "0) Keluar"
   echo ""
 }
@@ -299,6 +350,10 @@ main_loop() {
         ;;
       15)
         git_update_project
+        pause_screen
+        ;;
+      16)
+        setup_whatsapp_bot
         pause_screen
         ;;
       0)
