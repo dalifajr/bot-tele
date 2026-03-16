@@ -287,6 +287,27 @@ function getPendingOrders() {
   return listOrders().filter((item) => item.status === ORDER_STATUS.PENDING_PAYMENT && !isExpired(item));
 }
 
+function cancelOrderById(orderId, reason = "ADMIN_CANCELLED") {
+  const orders = listOrders();
+  const idx = orders.findIndex((item) => item.id === orderId);
+
+  if (idx === -1) {
+    return { ok: false, reason: "NOT_FOUND" };
+  }
+
+  if (orders[idx].status !== ORDER_STATUS.PENDING_PAYMENT) {
+    return { ok: false, reason: "NOT_PENDING", order: orders[idx] };
+  }
+
+  orders[idx].status = ORDER_STATUS.CANCELLED;
+  orders[idx].cancelledAt = nowIso();
+  orders[idx].cancelReason = String(reason || "ADMIN_CANCELLED");
+  orders[idx].updatedAt = nowIso();
+  saveOrders(orders);
+
+  return { ok: true, order: orders[idx] };
+}
+
 function getRevenueSummary() {
   const paid = listOrders().filter((item) => item.status === ORDER_STATUS.PAID || item.status === ORDER_STATUS.DELIVERED);
   const totalRevenueAllTime = paid.reduce((sum, row) => sum + Number(row.total || 0), 0);
@@ -370,6 +391,7 @@ module.exports = {
   markOrderDeliveryFailed,
   expireOverdueOrders,
   getPendingOrders,
+  cancelOrderById,
   getRevenueSummary,
   resetRevenueSummary,
   getOrderSummaryByStatus

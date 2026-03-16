@@ -18,6 +18,7 @@ const {
   getOrderById,
   markOrderPaid,
   getPendingOrders,
+  cancelOrderById,
   getRevenueSummary,
   resetRevenueSummary
 } = require("../../services/orderService");
@@ -256,6 +257,33 @@ function renderOrderStatusText(order) {
     `Delivery attempts: ${order.delivery && Number.isInteger(order.delivery.attempts) ? order.delivery.attempts : 0}`,
     `Delivery error: ${order.delivery && order.delivery.lastError ? order.delivery.lastError : "-"}`
   ].join("\n");
+}
+
+function pendingOrdersKeyboard(pendingOrders) {
+  const rows = [];
+  for (const order of pendingOrders.slice(0, 5)) {
+    rows.push([
+      Markup.button.callback(
+        `❌ Batalkan ${order.id.slice(0, 18)}...`,
+        `admin_cancel_order_prompt:${order.id}`
+      )
+    ]);
+  }
+
+  rows.push([Markup.button.callback("🔄 Refresh", "admin_btn_pending")]);
+  rows.push([Markup.button.callback("🔙 Kembali", "menu_admin")]);
+
+  return Markup.inlineKeyboard(rows);
+}
+
+function pendingCancelConfirmKeyboard(orderId) {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback("✅ Ya, Batalkan", `admin_cancel_order_confirm:${orderId}`),
+      Markup.button.callback("❌ Batal", "admin_btn_pending")
+    ],
+    [Markup.button.callback("🔙 Kembali", "menu_admin")]
+  ]);
 }
 
 function adminInputKeyboard() {
@@ -1041,7 +1069,70 @@ function registerUserHandlers(bot) {
           "Preview order:",
           ...preview
         ].join("\n"),
-      adminMenuKeyboard()
+      pending.length === 0 ? adminMenuKeyboard() : pendingOrdersKeyboard(pending)
+    );
+  });
+
+  bot.action(/^admin_cancel_order_prompt:(.+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const orderId = ctx.match[1];
+    const order = getOrderById(orderId);
+    if (!order) {
+      await ctx.answerCbQuery("Order tidak ditemukan", { show_alert: true });
+      return;
+    }
+
+    if (order.status !== "PENDING_PAYMENT") {
+      await ctx.answerCbQuery("Order sudah tidak pending", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      [
+        "⚠️ Konfirmasi Batalkan Pesanan",
+        `Order ID: ${order.id}`,
+        `Customer: ${order.telegramId}`,
+        `Total: ${formatCurrencyIdr(order.total)}`,
+        "Pesanan ini akan diubah ke status CANCELLED."
+      ].join("\n"),
+      pendingCancelConfirmKeyboard(order.id)
+    );
+  });
+
+  bot.action(/^admin_cancel_order_confirm:(.+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const orderId = ctx.match[1];
+    const cancelled = cancelOrderById(orderId, `ADMIN_CANCELLED_BY_${ctx.from?.id || "UNKNOWN"}`);
+    if (!cancelled.ok) {
+      await ctx.answerCbQuery("Gagal batalkan pesanan", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery("Pesanan dibatalkan");
+
+    const pending = getPendingOrders();
+    const preview = pending.slice(0, 5).map((row) => `- ${row.id} | ${formatCurrencyIdr(row.total)}`);
+    await replyOrEdit(
+      ctx,
+      [
+        "✅ Pesanan berhasil dibatalkan.",
+        `Order ID: ${cancelled.order.id}`,
+        "",
+        "⏳ Transaksi Pending",
+        `Total transaksi menunggu pembayaran: ${pending.length}`,
+        ...(pending.length ? ["", "Preview order:", ...preview] : ["", "Tidak ada transaksi pending saat ini."])
+      ].join("\n"),
+      pending.length === 0 ? adminMenuKeyboard() : pendingOrdersKeyboard(pending)
     );
   });
 
