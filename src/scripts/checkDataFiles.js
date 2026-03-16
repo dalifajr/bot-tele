@@ -7,6 +7,7 @@ const files = [
   "terjual.json",
   path.join("data", "orders.json"),
   path.join("data", "revenue_reset_state.json"),
+  path.join("data", "session_state.json"),
   path.join("data", "customers.json"),
   path.join("data", "stock_alert_state.json")
 ];
@@ -34,6 +35,13 @@ function run() {
       ? { lastReadyCount: null, lowNotified: false }
       : file.endsWith("revenue_reset_state.json")
         ? { lastResetAt: null }
+        : file.endsWith("session_state.json")
+          ? {
+            userCheckoutQty: {},
+            userLastOrderId: {},
+            adminInputState: {},
+            adminMassState: {}
+          }
       : [];
     ensureJsonFile(full, fallback);
   }

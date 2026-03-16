@@ -28,6 +28,7 @@ const { deliverOrderAccounts } = require("../../services/deliveryService");
 const { notifyOrderCreated, checkAndNotifyReadyStock } = require("../../services/adminNotificationService");
 const { getBroadcastAudience } = require("../../services/customerService");
 const { setProductPriceIdr } = require("../../services/priceConfigService");
+const { loadSessionState, saveSessionState } = require("../../services/sessionStateService");
 const {
   invalidUsageMessage,
   orderNotFoundMessage,
@@ -43,6 +44,73 @@ const adminMassState = new Map();
 const adminSearchState = new Map();
 const ACCOUNT_LIST_PAGE_SIZE = 10;
 const USER_ORDER_PAGE_SIZE = 5;
+
+function snapshotState() {
+  const adminMassStateSnapshot = {};
+  for (const [userId, state] of adminMassState.entries()) {
+    adminMassStateSnapshot[userId] = {
+      source: state.source || null,
+      target: state.target || "READY",
+      selectedIds: Array.from(state.selectedIds || [])
+    };
+  }
+
+  return {
+    userCheckoutQty: Object.fromEntries(userCheckoutQty.entries()),
+    userLastOrderId: Object.fromEntries(userLastOrderId.entries()),
+    adminInputState: Object.fromEntries(adminInputState.entries()),
+    adminMassState: adminMassStateSnapshot
+  };
+}
+
+function persistSessionState() {
+  saveSessionState(snapshotState());
+}
+
+function hydrateSessionState() {
+  const saved = loadSessionState();
+
+  for (const [userId, qty] of Object.entries(saved.userCheckoutQty || {})) {
+    const numericQty = Number(qty);
+    if (Number.isInteger(numericQty) && numericQty > 0) {
+      userCheckoutQty.set(String(userId), Math.min(50, numericQty));
+    }
+  }
+
+  for (const [userId, orderId] of Object.entries(saved.userLastOrderId || {})) {
+    if (orderId) {
+      userLastOrderId.set(String(userId), String(orderId));
+    }
+  }
+
+  for (const [userId, stateName] of Object.entries(saved.adminInputState || {})) {
+    if (stateName) {
+      adminInputState.set(String(userId), String(stateName));
+    }
+  }
+
+  for (const [userId, state] of Object.entries(saved.adminMassState || {})) {
+    if (!state || typeof state !== "object") {
+      continue;
+    }
+
+    adminMassState.set(String(userId), {
+      source: state.source || "ready",
+      target: state.target || "READY",
+      selectedIds: new Set(Array.isArray(state.selectedIds) ? state.selectedIds : [])
+    });
+  }
+}
+
+function setLastOrderId(userId, orderId) {
+  userLastOrderId.set(String(userId), String(orderId));
+  persistSessionState();
+}
+
+function clearLastOrderId(userId) {
+  userLastOrderId.delete(String(userId));
+  persistSessionState();
+}
 
 function isAdminUser(ctx) {
   return config.adminTelegramIds.includes(String(ctx.from?.id));
@@ -73,6 +141,7 @@ function getQty(userId) {
 function setQty(userId, qty) {
   const normalized = Math.max(1, Math.min(50, Number(qty) || 1));
   userCheckoutQty.set(userId, normalized);
+  persistSessionState();
   return normalized;
 }
 
@@ -403,6 +472,7 @@ function adminMassStatusKeyboard() {
 
 function setAdminMassState(userId, state) {
   adminMassState.set(String(userId), state);
+  persistSessionState();
 }
 
 function getAdminMassState(userId) {
@@ -411,6 +481,7 @@ function getAdminMassState(userId) {
 
 function clearAdminMassState(userId) {
   adminMassState.delete(String(userId));
+  persistSessionState();
 }
 
 function setAdminSearchState(userId, state) {
@@ -562,10 +633,12 @@ function runMassStatusUpdateByIds(selectedIds, targetStatus) {
 
 function setAdminState(userId, state) {
   adminInputState.set(String(userId), state);
+  persistSessionState();
 }
 
 function clearAdminState(userId) {
   adminInputState.delete(String(userId));
+  persistSessionState();
 }
 
 function getAdminState(userId) {
@@ -663,7 +736,7 @@ async function createOrderForUser(bot, ctx, quantity) {
     reservedAccounts: reserved
   });
 
-  userLastOrderId.set(String(ctx.from.id), order.id);
+  setLastOrderId(ctx.from.id, order.id);
 
   await notifyOrderCreated(bot, order);
 
@@ -689,6 +762,8 @@ async function createOrderForUser(bot, ctx, quantity) {
 }
 
 function registerUserHandlers(bot) {
+  hydrateSessionState();
+
   bot.start(async (ctx) => {
     await sendMainMenu(ctx);
   });
@@ -746,7 +821,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    userLastOrderId.set(String(ctx.from.id), order.id);
+    setLastOrderId(ctx.from.id, order.id);
     await ctx.reply(renderOrderStatusText(order));
   });
 
@@ -995,7 +1070,7 @@ function registerUserHandlers(bot) {
 
     const order = getOrderById(lastOrderId);
     if (!order || String(order.telegramId) !== String(ctx.from.id)) {
-      userLastOrderId.delete(String(ctx.from.id));
+      clearLastOrderId(ctx.from.id);
       await replyOrEdit(
         ctx,
         [
@@ -1044,7 +1119,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    userLastOrderId.set(String(ctx.from.id), order.id);
+    setLastOrderId(ctx.from.id, order.id);
     await replyOrEdit(ctx, renderOrderStatusText(order), userOrderDetailKeyboard(order.id, page));
   });
 
@@ -1068,7 +1143,7 @@ function registerUserHandlers(bot) {
       return;
     }
 
-    userLastOrderId.set(String(ctx.from.id), order.id);
+    setLastOrderId(ctx.from.id, order.id);
     await replyOrEdit(
       ctx,
       renderOrderStatusText(order),
