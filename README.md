@@ -173,7 +173,7 @@ Admin:
 Alur admin via tombol:
 - Dari `/start` klik `Menu Admin`
 - Pilih aksi cepat: cek stok, cek pending, cek pendapatan
-- Di menu `Cek Pending`, admin bisa membatalkan pesanan pending melalui tombol konfirmasi
+- Di menu `Cek Pending`, admin bisa melihat detail order pending dan membatalkan pesanan melalui tombol konfirmasi
 - Gunakan menu `Ubah Harga` untuk mengganti harga produk (angka saja), perubahan langsung dipakai untuk checkout berikutnya
 - Di menu `Cek Pendapatan`, admin bisa reset laporan periode aktif tanpa menghapus histori order
 - Gunakan `Daftar Akun` untuk melihat list akun awaiting/ready/sold (dengan pagination) lalu klik akun untuk detail + tombol ubah status

@@ -264,6 +264,10 @@ function pendingOrdersKeyboard(pendingOrders) {
   for (const order of pendingOrders.slice(0, 5)) {
     rows.push([
       Markup.button.callback(
+        `📄 Detail ${order.id.slice(0, 12)}...`,
+        `admin_pending_detail:${order.id}`
+      ),
+      Markup.button.callback(
         `❌ Batalkan ${order.id.slice(0, 18)}...`,
         `admin_cancel_order_prompt:${order.id}`
       )
@@ -282,6 +286,14 @@ function pendingCancelConfirmKeyboard(orderId) {
       Markup.button.callback("✅ Ya, Batalkan", `admin_cancel_order_confirm:${orderId}`),
       Markup.button.callback("❌ Batal", "admin_btn_pending")
     ],
+    [Markup.button.callback("🔙 Kembali", "menu_admin")]
+  ]);
+}
+
+function pendingOrderDetailKeyboard(orderId) {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback("❌ Batalkan Pesanan", `admin_cancel_order_prompt:${orderId}`)],
+    [Markup.button.callback("🔄 Kembali ke Pending", "admin_btn_pending")],
     [Markup.button.callback("🔙 Kembali", "menu_admin")]
   ]);
 }
@@ -1102,6 +1114,41 @@ function registerUserHandlers(bot) {
         "Pesanan ini akan diubah ke status CANCELLED."
       ].join("\n"),
       pendingCancelConfirmKeyboard(order.id)
+    );
+  });
+
+  bot.action(/^admin_pending_detail:(.+)$/, async (ctx) => {
+    if (!isAdminUser(ctx)) {
+      await ctx.answerCbQuery("Anda bukan admin", { show_alert: true });
+      return;
+    }
+
+    const orderId = ctx.match[1];
+    const order = getOrderById(orderId);
+    if (!order) {
+      await ctx.answerCbQuery("Order tidak ditemukan", { show_alert: true });
+      return;
+    }
+
+    if (order.status !== "PENDING_PAYMENT") {
+      await ctx.answerCbQuery("Order sudah tidak pending", { show_alert: true });
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    await replyOrEdit(
+      ctx,
+      [
+        "📄 Detail Order Pending",
+        `Order ID: ${order.id}`,
+        `Customer: ${order.telegramId}`,
+        `Qty: ${order.quantity}`,
+        `Total: ${formatCurrencyIdr(order.total)}`,
+        `Created At (WIB): ${formatTimestampWib(order.createdAt, config.displayTimezone)}`,
+        `Expired (WIB): ${formatTimestampWib(order.payment.expiresAt, config.displayTimezone)}`,
+        `Status: ${order.status}`
+      ].join("\n"),
+      pendingOrderDetailKeyboard(order.id)
     );
   });
 
