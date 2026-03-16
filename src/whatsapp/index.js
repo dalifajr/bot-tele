@@ -479,10 +479,22 @@ async function handleAdminCommand(client, botAdapter, message, command, args, ra
 }
 
 async function startWhatsappBot() {
+  const puppeteerConfig = {
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox"
+    ]
+  };
+
+  if (config.whatsappPuppeteerExecutablePath) {
+    puppeteerConfig.executablePath = config.whatsappPuppeteerExecutablePath;
+  }
+
   const client = new Client({
     authStrategy: new LocalAuth({
       clientId: "bot-tele-whatsapp"
-    })
+    }),
+    puppeteer: puppeteerConfig
   });
 
   const botAdapter = buildBotAdapter(client);

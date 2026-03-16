@@ -109,6 +109,7 @@ TELEGRAM_BOT_TOKEN=
 ADMIN_TELEGRAM_IDS=123456789
 WHATSAPP_ENABLED=false
 ADMIN_WHATSAPP_NUMBERS=628123456789
+WHATSAPP_PUPPETEER_EXECUTABLE_PATH=
 STORE_NAME=dzulfikrialifajri store
 PRODUCT_NAME=GitHub Students Dev Pack
 PRODUCT_PRICE_IDR=150000
@@ -126,6 +127,7 @@ Catatan:
 - `ADMIN_TELEGRAM_IDS` bisa lebih dari satu, pisahkan dengan koma.
 - `ADMIN_WHATSAPP_NUMBERS` bisa lebih dari satu, pisahkan dengan koma (format angka tanpa simbol, contoh `628123456789`).
 - `WHATSAPP_ENABLED=true` untuk menjalankan bot WhatsApp.
+- `WHATSAPP_PUPPETEER_EXECUTABLE_PATH` opsional untuk pakai binary Chrome/Chromium sistem (contoh `/usr/bin/chromium-browser`).
 - `PAYMENT_WEBHOOK_SECRET` wajib diganti di production.
 - `LOW_STOCK_THRESHOLD` menentukan batas stok ready yang dianggap menipis.
 - `DISPLAY_TIMEZONE` mengatur zona waktu tampilan pesan bot (default WIB / Asia/Jakarta).
@@ -167,6 +169,16 @@ Catatan WhatsApp:
 - Session login WhatsApp disimpan lokal via `LocalAuth`.
 - Version WhatsApp saat ini fokus command text (tanpa inline button seperti Telegram).
 - Command admin WhatsApp yang tersedia: `/admin`, `/admin_stok`, `/admin_pending`, `/admin_pendapatan`, `/admin_reset_pendapatan`, `/admin_cari`, `/admin_tambah`, `/admin_set_status`, `/admin_broadcast`.
+- Jika muncul error library Chromium (contoh `libatk-1.0.so.0`), install dependency sistem:
+
+```bash
+sudo apt-get update -y
+sudo apt-get install -y \
+  ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 \
+  libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 \
+  libnss3 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 \
+  libxfixes3 libxrandr2 xdg-utils
+```
 
 ## Daftar command
 
